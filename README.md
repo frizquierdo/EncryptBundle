@@ -181,13 +181,13 @@ with the DateType form type.
 
 ## Step 4: General Use
 
-The bundle comes with an DoctrineEncryptSubscriber. This subscriber catches the doctrine events
+The bundle comes with an DoctrineEncryptListener. This listener catches the doctrine events
 onLoad, onFlush and postFlush.
 
-The onLoad event subscriber will decrypt your entity parameter at loading. This means that your forms
+The onLoad event listener will decrypt your entity parameter at loading. This means that your forms
 and form fields will already be decrypted.
 
-The onFlush and postFlush event subscribers will check if encryption is enabled, and encrypt the data
+The onFlush and postFlush event listeners will check if encryption is enabled, and encrypt the data
 before entry to the database.
 
 So, in normal CRUD operation you do not need to do anything in the controller for encrypting or decrypting
@@ -201,17 +201,11 @@ either by using autowiring or defining the injection in your service definitions
 ```php
 <?php
     use PSolutions\EncryptBundle\Encryptors\EncryptorInterface;
-    ...
-    /**
-     * @var PSolutions\EncryptBundle\Encryptors\EncryptorInterface;
-     */
-    private $encryptor;
-    ...
-    
+        
     // Inject the Encryptor from the service container at class construction
-    public function __construct(EncryptorInterface $encryptor)
+    public function __construct(private readonly EncryptorInterface $encryptor)
     {
-        $this->encryptor = $encryptor;
+        
     }
     
     // Inject the Encryptor in controller actions.
