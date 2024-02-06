@@ -2,7 +2,7 @@
     "name" : "psolutions/encrypt-bundle",
     "type" : "symfony-bundle",
     "description" : "Bundle provides a service for encrypting values via attribute.",
-    "homepage": "https://github.com/mogilvie/EncryptBundle",
+    "homepage": "https://github.com/frizquierdo/EncryptBundle",
     "authors" : [{
         "name" : "Francisco Izquierdo",
         "email" : "frizquierdo87@gmail.com"
