@@ -52,7 +52,7 @@ of the Composer documentation.
 
 ## Step 2: Enable the bundle
 
-The receipe will create a package config file under config/packages/spec_shaper_encrypt.yaml.
+The receipe will create a package config file under config/packages/psolutions_encrypt.yaml.
 
 If required, enable the bundle by adding it to the list of registered bundles
 in the `config/bundles.php` file of your project:
@@ -62,7 +62,7 @@ in the `config/bundles.php` file of your project:
 
 return [
     ...
-    PSolutions\EncryptBundle\SpecShaperEncryptBundle::class => ['all' => true],
+    PSolutions\EncryptBundle\PSolutionsEncryptBundle::class => ['all' => true],
 ];
 
 ```
@@ -85,7 +85,7 @@ PSOLUTIONS_ENCRYPT_KEY= change_me!
 Maker will have created a packages yaml file. The key is resolved in there.
 
 ```yaml
-# app/config/packages/spec_shaper_encrypt.yaml
+# app/config/packages/psolutions_encrypt.yaml
 psolutions_encrypt:
   encrypt_key: '%env(PSOLUTIONS_ENCRYPT_KEY)%'
   is_disabled: false # Turn this to true to disable the encryption.
