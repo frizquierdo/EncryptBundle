@@ -1,5 +1,5 @@
 {
-    "name" : "specshaper/encrypt-bundle",
+    "name" : "psolutions/encrypt-bundle",
     "type" : "symfony-bundle",
     "description" : "Bundle provides a service for encrypting values via attribute.",
     "homepage": "https://github.com/mogilvie/EncryptBundle",
