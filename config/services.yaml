@@ -20,7 +20,7 @@ services:
     PSolutions\EncryptBundle\Encryptors\EncryptorInterface:
         factory: ['@PSolutions\EncryptBundle\Encryptors\EncryptorFactory','createService']
         arguments:
-            $encryptKey: '%spec_shaper_encrypt.encrypt_key%'
+            $encryptKey: '%psolutions_encrypt.encrypt_key%'
 
     # Encrypt Twig extension that defins the decrypt filter.
     PSolutions\EncryptBundle\Twig\EncryptExtension:

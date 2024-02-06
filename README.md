@@ -1,4 +1,4 @@
-# SpecShaper Encrypt Bundle
+# PSolutions Encrypt Bundle
 
 A bundle to handle encoding and decoding of parameters using OpenSSL and Doctrine lifecycle events.
 
