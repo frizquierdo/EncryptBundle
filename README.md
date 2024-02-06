@@ -3,11 +3,9 @@
 A bundle to handle encoding and decoding of parameters using OpenSSL and Doctrine lifecycle events.
 
 Features include:
-- V3 is Symfony 5.4|6 PHP 8
-- V2 is Symfony 5.
-- v1 is Symfony 3.4 and not active anymore.
+- v1 is Symfony 6.4 and 7.0 compatible.
 - Uses OpenSSL
-- Uses Lifecycle events
+- Uses Event listeners
 
 Features road map:
 
@@ -30,7 +28,7 @@ to encode users private data. The bundle is expanded in a larger [gdpr-bundle](h
 
 ## Reporting an issue or a feature request
 
-Issues and feature requests are tracked in the [Github issue tracker](https://github.com/mogilvie/HelpBundle/issues).
+Issues and feature requests are tracked in the [Github issue tracker](https://github.com/frizquierdo/EncryptBundle/issues).
 
 When reporting a bug, it may be a good idea to reproduce it in a basic project
 built using the [Symfony Standard Edition](https://github.com/symfony/symfony-standard)
@@ -45,7 +43,7 @@ Open a command console, enter your project directory and execute the
 following command to download the latest development version of this bundle:
 
 ```
-$ composer require specshaper/encrypt-bundle dev-master
+$ composer require psolutions/encrypt-bundle dev-master
 ```
 
 This command requires you to have Composer installed globally, as explained
@@ -64,7 +62,7 @@ in the `config/bundles.php` file of your project:
 
 return [
     ...
-    SpecShaper\EncryptBundle\SpecShaperEncryptBundle::class => ['all' => true],
+    PSolutions\EncryptBundle\SpecShaperEncryptBundle::class => ['all' => true],
 ];
 
 ```
@@ -80,7 +78,7 @@ $ bin/console encrypt:genkey
 Copy the key into your .env file.
 ```
 ###> encrypt-bundle ###
-SPEC_SHAPER_ENCRYPT_KEY= change_me!
+PSOLUTIONS_ENCRYPT_KEY= change_me!
 ###< encrypt-bundle ###
 ```
 
@@ -88,8 +86,8 @@ Maker will have created a packages yaml file. The key is resolved in there.
 
 ```yaml
 # app/config/packages/spec_shaper_encrypt.yaml
-spec_shaper_encrypt:
-  encrypt_key: '%env(SPEC_SHAPER_ENCRYPT_KEY)%'
+psolutions_encrypt:
+  encrypt_key: '%env(PSOLUTIONS_ENCRYPT_KEY)%'
   is_disabled: false # Turn this to true to disable the encryption.
   connections:   # Optional, define the connection name(s) for the subscriber to listen to.
     - 'default'
@@ -121,41 +119,27 @@ Add the Encrypted attribute class within the entity.
 ```php
 <?php
 ...
-use SpecShaper\EncryptBundle\Annotations\Encrypted;
+use PSolutions\EncryptBundle\Annotations\Encrypted;
 ```
 
 Add the attribute #[Encrypted] to the properties you want encrypted.
 
-Note that the legacy annotation '@Encrypted' in the parameters is deprecated and
-will be discontinued in the next major update.
 ```php
 <?php
 
-    /**
-     * A PPS number is always 7 numbers followed by either one or two letters.
-     * 
-     * @ORM\Column(type="string")
-     */
     #[Encrypted]
+    #[Column]
     protected string $taxNumber;
     
-    /**
-     * True if the user is self employed.
-     * 
-     * @ORM\Column(type="string", nullable=true)
-     */
+    #[Column(type: string, nullable: true)]
     #[Encrypted]
     protected ?bool $isSelfEmployed;
     
     /**
      * Date of birth
-     * 
-     * @Encrypted
-     * Note that the above Encrypted property is a legacy annotation, and while
-     * it still is supported, it will be deprecated in favour of Attributes.
-     * 
-     * @ORM\Column(type="string", nullable=true)
      */
+    #[Encrypted]
+    #[Column]
     protected ?String $dob;
    
 ```
@@ -216,10 +200,10 @@ either by using autowiring or defining the injection in your service definitions
 
 ```php
 <?php
-    use SpecShaper\EncryptBundle\Encryptors\EncryptorInterface;
+    use PSolutions\EncryptBundle\Encryptors\EncryptorInterface;
     ...
     /**
-     * @var SpecShaper\EncryptBundle\Encryptors\EncryptorInterface;
+     * @var PSolutions\EncryptBundle\Encryptors\EncryptorInterface;
      */
     private $encryptor;
     ...
@@ -249,8 +233,8 @@ Or you can dispatch the EncryptEvent.
 ```php
 <?php
     ...
-    use SpecShaper\EncryptBundle\Event\EncryptEvent;
-    use SpecShaper\EncryptBundle\Event\EncryptEvents;
+    use PSolutions\EncryptBundle\Event\EncryptEvent;
+    use PSolutions\EncryptBundle\Event\EncryptEvents;
     use Symfony\Component\EventDispatcher\EventDispatcherInterface;
     ...
     
