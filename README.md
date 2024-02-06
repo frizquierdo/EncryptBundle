@@ -92,7 +92,6 @@ psolutions_encrypt:
   connections:   # Optional, define the connection name(s) for the subscriber to listen to.
     - 'default'
     - 'tenant'
-  subscriber_class: App\Subscriber\MyCustomSubscriber # Optional to override the bundle Doctrine event subscriber.
   encryptor_class: App\Encryptors\MyCustomEncryptor # Optional to override the bundle OpenSslEncryptor.
   annotation_classes: # Optional to override the default annotation/Attribute object.
     - App\Annotation\MyAttribute
@@ -100,9 +99,6 @@ psolutions_encrypt:
 
 You can disable encryption by setting the 'is_disabled' option to true. Decryption still continues if any values
 contain the \<ENC> suffix.
-
-You can extend the EncryptBundle default Subscriber and override its methods. Use the 'subscriber_class' option
-to point the bundle at your custom subscriber.
 
 If you want to define your own annotation/attribute, then this can be used to trigger encryption by adding the annotation 
 class name to the 'annotation_classes' option array.
