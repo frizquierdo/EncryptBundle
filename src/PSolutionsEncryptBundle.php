@@ -48,7 +48,7 @@ class PSolutionsEncryptBundle extends AbstractBundle {
         $container->import('../config/services.yaml');
 
         if ($builder->hasParameter('encrypt_key')) {
-            trigger_deprecation('PSolutionsEncryptBundle', 'v3.0.2', 'storing PSolutions Encrypt Key in parameters is deprecated. Move to Config/Packages/psolutions_encrypt.yaml');
+            trigger_deprecation('PSolutionsEncryptBundle', 'v1.0.0', 'storing PSolutions Encrypt Key in parameters is deprecated. Move to Config/Packages/psolutions_encrypt.yaml');
         }
 
         $encryptKey = $config['encrypt_key'];
