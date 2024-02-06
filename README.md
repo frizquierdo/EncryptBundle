@@ -1,6 +1,6 @@
 # PSolutions Encrypt Bundle
 
-A bundle to handle encoding and decoding of parameters using OpenSSL and Doctrine lifecycle events.
+A bundle to handle encoding and decoding of parameters using OpenSSL and Doctrine lifecycle events. It's a fork of https://github.com/mogilvie/EncryptBundle
 
 Features include:
 - v1 is Symfony 6.4 and 7.0 compatible.
