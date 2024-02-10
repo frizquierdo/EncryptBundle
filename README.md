@@ -43,13 +43,8 @@ Open a command console, enter your project directory and execute the
 following command to download the latest development version of this bundle:
 
 ```
-$ composer require psolutions/encrypt-bundle dev-master
+$ composer require psolutions/encrypt-bundle
 ```
-
-This command requires you to have Composer installed globally, as explained
-in the [installation chapter](https://getcomposer.org/doc/00-intro.md)
-of the Composer documentation.
-
 ## Step 2: Enable the bundle
 
 The receipe will create a package config file under config/packages/psolutions_encrypt.yaml.
