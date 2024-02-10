@@ -2,8 +2,10 @@
 
 namespace PSolutions\EncryptBundle\Encryptors;
 
+use Exception;
 use PSolutions\EncryptBundle\Event\EncryptKeyEvent;
 use PSolutions\EncryptBundle\Event\EncryptKeyEvents;
+use PSolutions\EncryptBundle\EventListener\DoctrineEncryptListenerInterface;
 use PSolutions\EncryptBundle\Exception\EncryptException;
 use PSolutions\EncryptBundle\Listeners\DoctrineEncryptListenerInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
@@ -39,7 +41,7 @@ class OpenSslEncryptor implements EncryptorInterface {
     }
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
     public function encrypt(?string $data): ?string {
         // If not data return data (null)
@@ -72,7 +74,7 @@ class OpenSslEncryptor implements EncryptorInterface {
     }
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
     public function decrypt(?string $data): ?string {
         // If the value is an object or null then ignore
@@ -115,7 +117,7 @@ class OpenSslEncryptor implements EncryptorInterface {
      * Decode the parameters file base64 key.
      * Check that the key is 256 bit.
      *
-     * @throws \Exception
+     * @throws Exception
      */
     private function getSecretKey(): string {
         // Throw an event to allow encryption keys to be defined during runtime.
@@ -140,7 +142,7 @@ class OpenSslEncryptor implements EncryptorInterface {
         $keyLengthOctet = mb_strlen($key, '8bit');
 
         if (32 !== $keyLengthOctet) {
-            throw new \Exception("Needs a 256-bit key, '" . ($keyLengthOctet * 8) . "'bit given!");
+            throw new Exception("Needs a 256-bit key, '" . ($keyLengthOctet * 8) . "'bit given!");
         }
 
         return $key;
