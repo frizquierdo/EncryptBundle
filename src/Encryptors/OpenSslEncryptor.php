@@ -7,7 +7,6 @@ use PSolutions\EncryptBundle\Event\EncryptKeyEvent;
 use PSolutions\EncryptBundle\Event\EncryptKeyEvents;
 use PSolutions\EncryptBundle\EventListener\DoctrineEncryptListenerInterface;
 use PSolutions\EncryptBundle\Exception\EncryptException;
-use PSolutions\EncryptBundle\Listeners\DoctrineEncryptListenerInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 /**
