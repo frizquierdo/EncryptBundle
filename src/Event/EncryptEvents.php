@@ -4,6 +4,6 @@ namespace PSolutions\EncryptBundle\Event;
 
 final class EncryptEvents
 {
-    public const ENCRYPT = 'sseb.encrypt';
-    public const DECRYPT = 'sseb.decrypt';
+    public const ENCRYPT = 'encrypt';
+    public const DECRYPT = 'decrypt';
 }

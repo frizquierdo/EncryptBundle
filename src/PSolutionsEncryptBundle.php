@@ -6,6 +6,7 @@ namespace PSolutions\EncryptBundle;
 
 use PSolutions\EncryptBundle\Annotations\Encrypted;
 use PSolutions\EncryptBundle\Encryptors\OpenSslEncryptor;
+use PSolutions\EncryptBundle\Listeners\DoctrineEncryptListener;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
@@ -24,6 +25,7 @@ class PSolutionsEncryptBundle extends AbstractBundle {
                 ->children()
                 ->scalarNode('encrypt_key')->end()
                 ->scalarNode('method')->defaultValue('OpenSSL')->end()
+                ->scalarNode('listener_class')->defaultValue(DoctrineEncryptListener::class)->end()
                 ->scalarNode('encryptor_class')->defaultValue(OpenSslEncryptor::class)->end()
                 ->scalarNode('is_disabled')->defaultValue(false)->end()
                 ->arrayNode('connections')
@@ -48,7 +50,7 @@ class PSolutionsEncryptBundle extends AbstractBundle {
         $container->import('../config/services.yaml');
 
         if ($builder->hasParameter('encrypt_key')) {
-            trigger_deprecation('PSolutionsEncryptBundle', 'v1.0.0', 'storing PSolutions Encrypt Key in parameters is deprecated. Move to Config/Packages/psolutions_encrypt.yaml');
+            \trigger_deprecation('PSolutionsEncryptBundle', 'v3.0.2', 'storing PSolutions Encrypt Key in parameters is deprecated. Move to Config/Packages/psolutions_encrypt.yaml');
         }
 
         $encryptKey = $config['encrypt_key'];
@@ -56,6 +58,7 @@ class PSolutionsEncryptBundle extends AbstractBundle {
         $container->parameters()->set($this->extensionAlias . '.encrypt_key', $encryptKey);
         $container->parameters()->set($this->extensionAlias . '.method', $config['method']);
         $container->parameters()->set($this->extensionAlias . '.encryptor_class', $config['encryptor_class']);
+        $container->parameters()->set($this->extensionAlias . '.listener_class', $config['listener_class']);
         $container->parameters()->set($this->extensionAlias . '.annotation_classes', $config['annotation_classes']);
         $container->parameters()->set($this->extensionAlias . '.is_disabled', $config['is_disabled']);
     }

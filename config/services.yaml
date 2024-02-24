@@ -1,6 +1,6 @@
 
 services:
-    # default configuration for services in *this* file
+    ## default configuration for services in *this* file
     _defaults:
         # automatically injects dependencies in your services
         autowire: true
@@ -10,16 +10,35 @@ services:
         # if you need to do this, you can override this setting on individual services
         public: false
 
-    # Need this interface to be autoloaded
-    Doctrine\Common\Annotations\Reader:
+    ## Annotation reader service
+    Doctrine\Common\Annotations\AnnotationReader:
+        
+    ## Listeners Interface, default is DoctrineEncryptListener but it can be overriden in the app config
+    PSolutions\EncryptBundle\Listeners\DoctrineEncryptListenerInterface:
+        class: '%psolutions_encrypt.listener_class%'
+        arguments:
+            $annotationArray: '%psolutions_encrypt.annotation_classes%'
+            $isDisabled: '%psolutions_encrypt.is_disabled%'
+        tags:
+            - { name: doctrine.event_listener, event: 'onFlush', connection: default }
+            - { name: doctrine.event_listener, event: 'postLoad', connection: default }
+            - { name: doctrine.event_listener, event: 'postUpdate', connection: default }
 
-    # Factory to create the encryptor/decryptor
+    ## Subscriber to catch any encrypt or decrypt events thrown
+    PSolutions\EncryptBundle\Listeners\EncryptEventListener:
+        arguments:
+            $isDisabled: '%psolutions_encrypt.is_disabled%'
+        tags:
+            - { name: kernel.event_listener, event: 'encrypt', connection: default }
+            - { name: kernel.event_listener, event: 'decrypt', connection: default }
+
+    ## Factory to create the encryptor/decryptor
     PSolutions\EncryptBundle\Encryptors\EncryptorFactory:
         arguments: ['@event_dispatcher']
         tags:
             - { name: monolog.logger, channel: app }
 
-    # The encryptor service created by the factory according to the passed method and using the encrypt_key
+    ## The encryptor service created by the factory according to the passed method and using the encrypt_key
     PSolutions\EncryptBundle\Encryptors\EncryptorInterface:
         factory: ['@PSolutions\EncryptBundle\Encryptors\EncryptorFactory','createService']
         arguments:
@@ -29,12 +48,12 @@ services:
     PSolutions\EncryptBundle\Twig\EncryptExtension:
         tags: ['twig.extension']
 
-    # CLI command to encrypt or decrypt all fields in a database
+    ## CLI command to encrypt or decrypt all fields in a database
     PSolutions\EncryptBundle\Command\EncryptDatabaseCommand:
         arguments:
             $annotationArray: '%psolutions_encrypt.annotation_classes%'
 
-    # CLI command to generate a 256 bit encryption key
+    ## CLI command to generate a 256 bit encryption key
     PSolutions\EncryptBundle\Command\GenKeyCommand:
         tags:
             -  { name: console.command }
