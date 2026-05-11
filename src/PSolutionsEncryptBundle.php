@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace PSolutions\EncryptBundle;
 
-use PSolutions\EncryptBundle\Annotations\Encrypted;
+use PSolutions\EncryptBundle\Attributes\Encrypted;
 use PSolutions\EncryptBundle\Encryptors\OpenSslEncryptor;
 use PSolutions\EncryptBundle\Listeners\DoctrineEncryptListener;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
@@ -59,7 +59,7 @@ class PSolutionsEncryptBundle extends AbstractBundle {
         $container->parameters()->set($this->extensionAlias . '.method', $config['method']);
         $container->parameters()->set($this->extensionAlias . '.encryptor_class', $config['encryptor_class']);
         $container->parameters()->set($this->extensionAlias . '.listener_class', $config['listener_class']);
-        $container->parameters()->set($this->extensionAlias . '.annotation_classes', $config['annotation_classes']);
+        $container->parameters()->set($this->extensionAlias . '.encrypted_attributes', $config['annotation_classes']);
         $container->parameters()->set($this->extensionAlias . '.is_disabled', $config['is_disabled']);
     }
 }

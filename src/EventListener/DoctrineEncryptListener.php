@@ -3,16 +3,15 @@
 namespace PSolutions\EncryptBundle\EventListener;
 
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
-use Doctrine\Common\Annotations\AnnotationReader as Reader;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Event\PostLoadEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
 use Doctrine\ORM\Events;
 use Psr\Log\LoggerInterface;
-use ReflectionProperty;
 use PSolutions\EncryptBundle\Encryptors\EncryptorInterface;
 use PSolutions\EncryptBundle\Exception\EncryptException;
+use ReflectionProperty;
 
 /**
  * Doctrine event listeners which encrypt/decrypt entities.
@@ -28,14 +27,15 @@ class DoctrineEncryptListener implements DoctrineEncryptListenerInterface {
     public const ENCRYPTOR_INTERFACE_NS = EncryptorInterface::class;
 
     /**
-     * An array of annotations which are to be encrypted.
-     * The default and initial is the bundle Encrypted Class.
+     * An array of class attribute names that mark properties for encryption.
+     * The default is the bundle's Encrypted attribute.
      */
-    protected array $annotationArray;
+    private array $encryptedAttributes;
 
     /**
      * Caches information on an entity's encrypted fields in an array keyed on
-     * the entity's class name. The value will be a list of Reflected fields that are encrypted.
+     * the entity's class name. The value will be a list of Reflected fields
+     * that are encrypted.
      */
     protected array $encryptedFieldCache = [];
     private array $rawValues = [];
@@ -43,12 +43,11 @@ class DoctrineEncryptListener implements DoctrineEncryptListenerInterface {
 
     public function __construct(
             private readonly LoggerInterface $logger,
-            private readonly Reader $annReader,
             private readonly EncryptorInterface $encryptor,
-            array $annotationArray,
+            array $encryptedAttributes,
             bool $isDisabled
     ) {
-        $this->annotationArray = $annotationArray;
+        $this->encryptedAttributes = $encryptedAttributes;
         $this->isDisabled = $isDisabled;
     }
 
@@ -62,7 +61,9 @@ class DoctrineEncryptListener implements DoctrineEncryptListenerInterface {
      * Used to programmatically disable encryption on flush operations.
      * Decryption still occurs if values have the <ENC> suffix.
      */
-    public function setIsDisabled(?bool $isDisabled = true): DoctrineEncryptListenerInterface {
+    public function setIsDisabled(
+        ?bool $isDisabled = true
+    ): DoctrineEncryptListenerInterface {
         $this->isDisabled = $isDisabled;
 
         return $this;
@@ -123,10 +124,15 @@ class DoctrineEncryptListener implements DoctrineEncryptListenerInterface {
         return $encryptedFields;
     }
 
-    /**
+/**
      * Process (encrypt/decrypt) entities fields.
      */
-    protected function processFields(object $entity, EntityManagerInterface $em, bool $isEncryptOperation, bool $isInsert): bool {
+    protected function processFields(
+        object $entity,
+        EntityManagerInterface $em,
+        bool $isEncryptOperation,
+        bool $isInsert
+    ): bool {
         // Get the encrypted properties in the entity.
         $properties = $this->getEncryptedFields($entity, $em);
 
@@ -137,10 +143,11 @@ class DoctrineEncryptListener implements DoctrineEncryptListenerInterface {
 
         $unitOfWork = $em->getUnitOfWork();
         $oid = spl_object_id($entity);
+        $className = get_class($entity);
 
-        foreach ($properties as $key => $refProperty) {
+        foreach ($properties as $key => $propertyAccessor) {
             // Get the value in the entity.
-            $value = $refProperty->getValue($entity);
+            $value = $propertyAccessor->getValue($entity);
 
             // Skip any null values.
             if (null === $value) {
@@ -148,7 +155,13 @@ class DoctrineEncryptListener implements DoctrineEncryptListenerInterface {
             }
 
             if (is_object($value)) {
-                throw new EncryptException('Cannot encrypt an object at ' . $refProperty->class . ':' . $refProperty->getName(), $value);
+                throw new EncryptException(
+                    sprintf('Cannot encrypt an object at %s:%s',
+                        $className,
+                        $key
+                    ),
+                    $value
+                );
             }
 
             // Encryption is fired by onFlush event, else it is an onLoad event.
@@ -158,12 +171,15 @@ class DoctrineEncryptListener implements DoctrineEncryptListenerInterface {
                 // Encrypt value only if change has been detected by Doctrine (comparing unencrypted values, see postLoad flow)
                 if (isset($changeSet[$key])) {
                     $encryptedValue = $this->encryptor->encrypt($value);
-                    $refProperty->setValue($entity, $encryptedValue);
-                    $unitOfWork->recomputeSingleEntityChangeSet($em->getClassMetadata(get_class($entity)), $entity);
+                    $propertyAccessor->setValue($entity, $encryptedValue);
+                    $unitOfWork->recomputeSingleEntityChangeSet(
+                        $em->getClassMetadata($className),
+                        $entity
+                    );
 
                     if ($isInsert) {
                         // Restore the decrypted value after the change set update
-                        $refProperty->setValue($entity, $value);
+                        $propertyAccessor->setValue($entity, $value);
                     } else {
                         // Will be restored during postUpdate cycle
                         $this->rawValues[$oid][$key] = $value;
@@ -172,10 +188,14 @@ class DoctrineEncryptListener implements DoctrineEncryptListenerInterface {
             } else {
                 // Decryption is fired by onLoad and postFlush events.
                 $decryptedValue = $this->decryptValue($value);
-                $refProperty->setValue($entity, $decryptedValue);
+                $propertyAccessor->setValue($entity, $decryptedValue);
 
                 // Tell Doctrine the original value was the decrypted one.
-                $unitOfWork->setOriginalEntityProperty($oid, $key, $decryptedValue);
+                $unitOfWork->setOriginalEntityProperty(
+                    $oid,
+                    $key,
+                    $decryptedValue
+                );
             }
         }
 
@@ -191,7 +211,7 @@ class DoctrineEncryptListener implements DoctrineEncryptListenerInterface {
             $className = get_class($entity);
             $meta = $em->getClassMetadata($className);
             foreach ($this->rawValues[$oid] as $prop => $rawValue) {
-                $refProperty = $meta->getReflectionProperty($prop);
+                $refProperty = $meta->getPropertyAccessor($prop);
                 $refProperty->setValue($entity, $rawValue);
             }
 
@@ -199,10 +219,13 @@ class DoctrineEncryptListener implements DoctrineEncryptListenerInterface {
         }
     }
 
-    /**
-     * @return array<string, ReflectionProperty>
-     */
-    protected function getEncryptedFields(object $entity, EntityManagerInterface $em): array {
+/**
+      * @return array<string, \Doctrine\ORM\Mapping\PropertyAccessor>
+      */
+    protected function getEncryptedFields(
+        object $entity,
+        EntityManagerInterface $em
+    ): array {
         $className = get_class($entity);
 
         if (isset($this->encryptedFieldCache[$className])) {
@@ -213,9 +236,9 @@ class DoctrineEncryptListener implements DoctrineEncryptListenerInterface {
 
         $encryptedFields = [];
 
-        foreach ($meta->getReflectionProperties() as $key => $refProperty) {
-            if ($this->isEncryptedProperty($refProperty)) {
-                $encryptedFields[$key] = $refProperty;
+        foreach ($meta->getPropertyAccessors() as $key => $propertyAccessor) {
+            if ($this->isEncryptedField($meta, $key)) {
+                $encryptedFields[$key] = $propertyAccessor;
             }
         }
 
@@ -224,26 +247,37 @@ class DoctrineEncryptListener implements DoctrineEncryptListenerInterface {
         return $encryptedFields;
     }
 
-    private function isEncryptedProperty(ReflectionProperty $refProperty): bool {
-        // If PHP8, and has attributes.
+    /**
+      * Check if a field is encrypted by checking its attributes.
+      */
+    private function isEncryptedField(object $meta, string $fieldName): bool {
+        $reflectionClass = $meta->getReflectionClass();
+        if (!$reflectionClass->hasProperty($fieldName)) {
+            return false;
+        }
+
+        $refProperty = $reflectionClass->getProperty($fieldName);
+
         if (method_exists($refProperty, 'getAttributes')) {
             foreach ($refProperty->getAttributes() as $refAttribute) {
-                if (in_array($refAttribute->getName(), $this->annotationArray)) {
+                if (in_array($refAttribute->getName(), $this->encryptedAttributes)) {
                     return true;
                 }
             }
         }
 
-        foreach ($this->annReader->getPropertyAnnotations($refProperty) as $key => $annotation) {
-            if (in_array(get_class($annotation), $this->annotationArray)) {
-                $refProperty->setAccessible(true);
+        return false;
+    }
 
-                $this->logger->debug(sprintf('Use of @Encrypted property from PSolutions/EncryptBundle in property %s is deprectated.
-                    Please use #[Encrypted] attribute instead.',
-                                $refProperty
-                ));
-
-                return true;
+    private function isEncryptedProperty(
+            ReflectionProperty $refProperty
+    ): bool {
+        // If PHP8, and has attributes.
+        if (method_exists($refProperty, 'getAttributes')) {
+            foreach ($refProperty->getAttributes() as $refAttribute) {
+                if (in_array($refAttribute->getName(), $this->encryptedAttributes)) {
+                    return true;
+                }
             }
         }
 

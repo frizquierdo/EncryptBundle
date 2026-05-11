@@ -10,14 +10,11 @@ services:
         # if you need to do this, you can override this setting on individual services
         public: false
 
-    ## Annotation reader service
-    Doctrine\Common\Annotations\AnnotationReader:
-        
     ## Listeners Interface, default is DoctrineEncryptListener but it can be overriden in the app config
-    PSolutions\EncryptBundle\Listeners\DoctrineEncryptListenerInterface:
+    PSolutions\EncryptBundle\EventListener\DoctrineEncryptListenerInterface:
         class: '%psolutions_encrypt.listener_class%'
         arguments:
-            $annotationArray: '%psolutions_encrypt.annotation_classes%'
+            $encryptedAttributes: '%psolutions_encrypt.encrypted_attributes%'
             $isDisabled: '%psolutions_encrypt.is_disabled%'
         tags:
             - { name: doctrine.event_listener, event: 'onFlush', connection: default }
@@ -25,12 +22,12 @@ services:
             - { name: doctrine.event_listener, event: 'postUpdate', connection: default }
 
     ## Subscriber to catch any encrypt or decrypt events thrown
-    PSolutions\EncryptBundle\Listeners\EncryptEventListener:
+    PSolutions\EncryptBundle\EventListener\EncryptEventListener:
         arguments:
             $isDisabled: '%psolutions_encrypt.is_disabled%'
         tags:
-            - { name: kernel.event_listener, event: 'encrypt', connection: default }
-            - { name: kernel.event_listener, event: 'decrypt', connection: default }
+            - { name: kernel.event_listener, event: 'encrypt' }
+            - { name: kernel.event_listener, event: 'decrypt' }
 
     ## Factory to create the encryptor/decryptor
     PSolutions\EncryptBundle\Encryptors\EncryptorFactory:
@@ -51,7 +48,7 @@ services:
     ## CLI command to encrypt or decrypt all fields in a database
     PSolutions\EncryptBundle\Command\EncryptDatabaseCommand:
         arguments:
-            $annotationArray: '%psolutions_encrypt.annotation_classes%'
+            $encryptedAttributes: '%psolutions_encrypt.encrypted_attributes%'
 
     ## CLI command to generate a 256 bit encryption key
     PSolutions\EncryptBundle\Command\GenKeyCommand:

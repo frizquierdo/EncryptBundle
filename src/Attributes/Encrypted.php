@@ -1,6 +1,6 @@
 <?php
 
-namespace PSolutions\EncryptBundle\Annotations;
+namespace PSolutions\EncryptBundle\Attributes;
 
 use Attribute;
 
@@ -8,4 +8,3 @@ use Attribute;
 final class Encrypted
 {
 }
-

@@ -6,13 +6,12 @@ use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\Persistence\ManagerRegistry;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Input\InputArgument;
+use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Command\Command;
 use PSolutions\EncryptBundle\Encryptors\EncryptorInterface;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\Common\Annotations\AnnotationReader as Reader;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 #[AsCommand(
@@ -25,10 +24,9 @@ class EncryptDatabaseCommand extends Command {
     private array $encryptedFields = [];
 
     public function __construct(
-            private readonly Reader $annotationReader,
             private readonly EncryptorInterface $encryptor,
             private readonly ManagerRegistry $registry,
-            private readonly array $annotationArray
+            private readonly array $encryptedAttributes
     ) {
         parent::__construct();
     }
@@ -132,23 +130,10 @@ class EncryptDatabaseCommand extends Command {
         return $this->encryptedFields;
     }
 
-    private function isEncryptedProperty(\ReflectionProperty $refProperty): bool {
-
+    private function isEncryptedProperty(\ReflectionProperty $refProperty): bool
+    {
         foreach ($refProperty->getAttributes() as $refAttribute) {
-            if (in_array($refAttribute->getName(), $this->annotationArray)) {
-                return true;
-            }
-        }
-
-        foreach ($this->annotationReader->getPropertyAnnotations($refProperty) as $key => $annotation) {
-            if (in_array(get_class($annotation), $this->annotationArray)) {
-                $refProperty->setAccessible(true);
-
-                $this->logger->debug(sprintf('Use of @Encrypted property from PSolutions/EncryptBundle in property %s is deprectated.
-                    Please use #[Encrypted] attribute instead.',
-                                $refProperty
-                ));
-
+            if (in_array($refAttribute->getName(), $this->encryptedAttributes)) {
                 return true;
             }
         }

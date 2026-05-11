@@ -45,8 +45,9 @@ class EncryptEventListener
     /**
      * Use an Encrypt event to encrypt a value.
      */
-    public function onEncrypt(EncryptEventInterface $event): EncryptEventInterface
-    {
+    public function onEncrypt(
+        EncryptEventInterface $event
+    ): EncryptEventInterface {
         $value = $event->getValue();
 
         if (false === $this->isDisabled) {
@@ -61,8 +62,9 @@ class EncryptEventListener
     /**
      * Use a decrypt event to decrypt a single value.
      */
-    public function onDecrypt(EncryptEventInterface $event): EncryptEventInterface
-    {
+    public function onDecrypt(
+        EncryptEventInterface $event
+    ): EncryptEventInterface {
         $value = $event->getValue();
 
         $decrypted = $this->decryptValue($value);

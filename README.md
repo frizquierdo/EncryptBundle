@@ -4,8 +4,42 @@ A bundle to handle encoding and decoding of parameters using OpenSSL and Doctrin
 
 Features include:
 - v1 is Symfony 6.4 and 7.0 compatible.
-- Uses OpenSSL
+- Uses OpenSSL with **AES-256-GCM authenticated encryption** (since v2.1)
 - Uses Event listeners
+- Provides confidentiality AND authenticity (tamper-proof)
+
+## ⚠️ IMPORTANT: Migration from Pre-v2.1 Versions
+
+**This bundle now uses AES-256-GCM instead of the old AES-256-CBC method.**
+
+If you are currently using a previous version of this bundle and have data already encrypted in your database:
+
+### **MIGRATION STEPS REQUIRED**
+
+1. **Export your existing encrypted data using the OLD version** (v2.0.x):
+   ```bash
+   # With the old version installed, decrypt everything first:
+   php bin/console encrypt:database decrypt
+   ```
+
+2. **Update the bundle to v2.1+**:
+   ```bash
+   composer update psolutions/encrypt-bundle
+   ```
+
+3. **Re-encrypt all data with the new GCM method**:
+   ```bash
+   php bin/console encrypt:database encrypt
+   ```
+
+**WARNING**: If you skip the migration step, the new version will NOT be able to decrypt data encrypted with the old CBC method. The two formats are incompatible.
+
+### About AES-256-GCM
+
+- **Authenticated Encryption**: AES-GCM provides both encryption AND message authentication.
+- **Tamper Detection**: Any modification to the encrypted data will be detected and will cause decryption to fail.
+- **No Padding Oracle Vulnerabilities**: Unlike CBC mode, GCM is not vulnerable to padding oracle attacks.
+- **Format**: Encrypted values are stored as `base64(IV . TAG . ciphertext) . '<ENC>'`.
 
 Features road map:
 
@@ -64,13 +98,13 @@ return [
 
 ## Step 2: Configure the bundle
 
-Generate a 256-bit key using the command provided in the bundle.
+Generate a 256-bit encryption key using the command provided:
 
 ```
 $ bin/console encrypt:genkey
 ```
- 
-Copy the key into your .env file.
+
+Copy the key into your .env file:
 ```
 ###> encrypt-bundle ###
 PSOLUTIONS_ENCRYPT_KEY= change_me!
@@ -80,7 +114,7 @@ PSOLUTIONS_ENCRYPT_KEY= change_me!
 Maker will have created a packages yaml file. The key is resolved in there.
 
 ```yaml
-# app/config/packages/psolutions_encrypt.yaml
+# config/packages/psolutions_encrypt.yaml
 psolutions_encrypt:
   encrypt_key: '%env(PSOLUTIONS_ENCRYPT_KEY)%'
   is_disabled: false # Turn this to true to disable the encryption.
@@ -88,15 +122,17 @@ psolutions_encrypt:
     - 'default'
     - 'tenant'
   encryptor_class: App\Encryptors\MyCustomEncryptor # Optional to override the bundle OpenSslEncryptor.
-  annotation_classes: # Optional to override the default annotation/Attribute object.
+  annotation_classes: # Optional to override the default Attribute object.
     - App\Annotation\MyAttribute
 ```
+
+The bundle uses **AES-256-GCM** authenticated encryption by default. You can override the encryptor class if you need a different cipher method, but it's strongly recommended to keep GCM for security.
 
 You can disable encryption by setting the 'is_disabled' option to true. Decryption still continues if any values
 contain the \<ENC> suffix.
 
-If you want to define your own annotation/attribute, then this can be used to trigger encryption by adding the annotation 
-class name to the 'annotation_classes' option array.
+If you want to define your own attribute, then this can be used to trigger encryption by adding the attribute
+to properties class that you want yo be encrypted.
 
 You can pass the class name of your own encyptor service using the optional encryptorClass option.
 
@@ -121,24 +157,24 @@ Add the attribute #[Encrypted] to the properties you want encrypted.
     #[Encrypted]
     #[Column]
     protected string $taxNumber;
-    
+
     #[Column(type: string, nullable: true)]
     #[Encrypted]
     protected ?bool $isSelfEmployed;
-    
+
     /**
      * Date of birth
      */
     #[Encrypted]
     #[Column]
     protected ?String $dob;
-   
+
 ```
-Where encrypting a field you will need to set the column type as string.  
+Where encrypting a field you will need to set the column type as string.
 
-Your getters and setters may also need to be type declared.  
+Your getters and setters may also need to be type declared.
 
-For example, boolean should either be return declared bool, or return a bool using a ternary method.  
+For example, boolean should either be return declared bool, or return a bool using a ternary method.
 
 ```php
 <?php
@@ -192,20 +228,20 @@ either by using autowiring or defining the injection in your service definitions
 ```php
 <?php
     use PSolutions\EncryptBundle\Encryptors\EncryptorInterface;
-        
+
     // Inject the Encryptor from the service container at class construction
     public function __construct(private readonly EncryptorInterface $encryptor)
     {
-        
+
     }
-    
+
     // Inject the Encryptor in controller actions.
     public function editAction(EncryptorInterface $encryptor)
     {
         ...
         // An example encrypted value, you would get this from your database query.
         $encryptedValue = "3DDOXwqZAEEDPJDK8/LI4wDsftqaNCN2kkyt8+QWr8E=<ENC>";
-        
+
         $decrypted = $encryptor->decrypt($encryptedValue);
         ...
     }
@@ -222,7 +258,7 @@ Or you can dispatch the EncryptEvent.
     use PSolutions\EncryptBundle\Event\EncryptEvents;
     use Symfony\Component\EventDispatcher\EventDispatcherInterface;
     ...
-    
+
     public function indexAction(EventDispatcherInterface $dispatcher)
     {
         ...
@@ -230,14 +266,14 @@ Or you can dispatch the EncryptEvent.
         $event = new EncryptEvent("3DDOXwqZAEEDPJDK8/LI4wDsftqaNCN2kkyt8+QWr8E=<ENC>");
 
         $dispatcher->dispatch(EncryptEvents::DECRYPT, $event);
-        
+
         $decrypted = $event->getValue();
     }
 ```
 
 ## Step 5: Decrypt in templates
 
-If you query a repository using a select with an array result 
+If you query a repository using a select with an array result
 then the doctrine onLoad event subscriber will not decrypt any encrypted
 values.
 
@@ -246,6 +282,39 @@ In this case, use the twig filter to decrypt your value when rendering.
 ```
 {{ employee.bankAccountNumber | decrypt }}
 ```
+
+# Security Features
+
+## Authenticated Encryption (AES-256-GCM)
+
+This bundle uses **AES-256-GCM** (Galois/Counter Mode), which provides:
+
+- **Confidentiality**: Data is encrypted and cannot be read without the key
+- **Authenticity**: Each ciphertext includes an authentication tag (16 bytes) that verifies it was created with the correct key
+- **Integrity**: Any modification to the encrypted data (bit flips, insertions, deletions) will be detected during decryption and will cause an `EncryptException`
+- **Protection against bit-flipping attacks**: Unlike CBC mode, GCM prevents attackers from modifying ciphertext in a controlled manner
+- **No padding oracle vulnerabilities**: GCM is a stream cipher mode that doesn't use padding
+
+## Key Requirements
+
+- The encryption key **must be exactly 256 bits (32 bytes)** after base64 decoding
+- Keys are stored base64-encoded in your `.env` or secrets vault
+- Generate a proper key with: `bin/console encrypt:genkey`
+
+## Data Format
+
+Encrypted values in the database have the following structure:
+
+```
+[base64( IV(12) + TAG(16) + ciphertext )] + '<ENC>'
+```
+
+- **IV** (Initialization Vector): 12 random bytes, unique for each encryption
+- **TAG** (Authentication Tag): 16 bytes, computed from ciphertext + key
+- **ciphertext**: The actual encrypted data
+- **'<ENC>'**: Suffix marker to identify encrypted values
+
+All components are necessary; removing or altering any part will cause decryption to fail.
 
 # Commands
 
@@ -262,4 +331,123 @@ $ bin/console encrypt:database decrypt connection
 The requried argument should be be decrypt or encrypt.
 
 There is an option to define the database connection if you employ multiple connections in your application.
+
+# Migration from Previous Versions
+
+## From v2.0.x or earlier (CBC mode) to v2.1+ (GCM mode)
+
+**This is a mandatory migration if you have existing encrypted data.**
+
+The encryption format changed from CBC to GCM, making them incompatible. Follow these steps exactly:
+
+### Step 1: Decrypt all existing data
+
+Using your **current codebase** (before updating the bundle), run:
+
+```bash
+php bin/console encrypt:database decrypt
+```
+
+This will convert all encrypted fields to plain text in the database.
+
+⚠️ **Verify** that the data is now unencrypted (check your database directly).
+
+### Step 2: Update the bundle
+
+```bash
+composer update psolutions/encrypt-bundle
+```
+
+Or update your `composer.json` and run `composer install`.
+
+### Step 3: Re-encrypt with the new GCM method
+
+With the updated bundle installed, run:
+
+```bash
+php bin/console encrypt:database encrypt
+```
+
+This will re-encrypt all plaintext fields using the new AES-256-GCM algorithm.
+
+### Step 4: Verify the migration
+
+Check a few records in your database. Encrypted values should now:
+- End with `<ENC>` suffix
+- Be longer than before (due to IV + TAG added)
+- Be base64-encoded strings
+
+Also test your application workflows to ensure encryption/decryption works correctly.
+
+## Rollback Procedure
+
+If something goes wrong after migration:
+
+1. Keep a backup of the database before starting migration
+2. If you need to roll back to the old version, you must first run `encrypt:database decrypt` with the new version, then reinstall the old version and run `encrypt:database encrypt` with it
+
+---
+
+⚠️ **Never skip the decryption step** before updating, or you will **permanently lose access** to data encrypted with the old CBC format.
+
+# Custom Encryptors
+
+You can create your own encryptor by implementing `EncryptorInterface`:
+
+```php
+use PSolutions\EncryptBundle\Encryptors\EncryptorInterface;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+
+class MyCustomEncryptor implements EncryptorInterface
+{
+    private EventDispatcherInterface $dispatcher;
+    private string $secretKey;
+
+    public function __construct(EventDispatcherInterface $dispatcher)
+    {
+        $this->dispatcher = $dispatcher;
+    }
+
+    public function setSecretKey(string $key): void
+    {
+        $this->secretKey = $key;
+    }
+
+    public function encrypt(?string $data): ?string
+    {
+        // Your custom encryption logic
+        // Must return null for null input
+        // Must check for '<ENC>' suffix and return if present
+    }
+
+    public function decrypt(?string $data): ?string
+    {
+        // Your custom decryption logic
+        // Must return null for null input
+        // Must check for '<ENC>' suffix and return if not present
+    }
+}
+```
+
+Then configure it:
+
+```yaml
+psolutions_encrypt:
+  encryptor_class: App\Encryptors\MyCustomEncryptor
+```
+
+⚠️ **Security Warning**: If you implement your own encryptor, you must ensure it provides proper authentication (like GCM's tag) to prevent tampering. Avoid CBC mode without HMAC.
+
+## Reference Implementation
+
+See `src/Encryptors/OpenSslEncryptor.php` for the reference implementation using AES-256-GCM. It demonstrates:
+- Proper IV generation (12 random bytes)
+- Authentication tag handling (16 bytes)
+- Base64 encoding of combined binary data
+- Key validation (32 bytes after decoding)
+- Error handling that doesn't leak information
+
+---
+
+For questions or issues, please open an issue on [GitHub](https://github.com/frizquierdo/EncryptBundle/issues).
 
