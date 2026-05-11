@@ -32,8 +32,6 @@ services:
     ## Factory to create the encryptor/decryptor
     PSolutions\EncryptBundle\Encryptors\EncryptorFactory:
         arguments: ['@event_dispatcher']
-        tags:
-            - { name: monolog.logger, channel: app }
 
     ## The encryptor service created by the factory according to the passed method and using the encrypt_key
     PSolutions\EncryptBundle\Encryptors\EncryptorInterface:
@@ -49,6 +47,8 @@ services:
     PSolutions\EncryptBundle\Command\EncryptDatabaseCommand:
         arguments:
             $encryptedAttributes: '%psolutions_encrypt.encrypted_attributes%'
+        tags:
+            -  { name: console.command }
 
     ## CLI command to generate a 256 bit encryption key
     PSolutions\EncryptBundle\Command\GenKeyCommand:

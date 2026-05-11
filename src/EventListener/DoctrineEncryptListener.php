@@ -8,7 +8,6 @@ use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Event\PostLoadEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
 use Doctrine\ORM\Events;
-use Psr\Log\LoggerInterface;
 use PSolutions\EncryptBundle\Encryptors\EncryptorInterface;
 use PSolutions\EncryptBundle\Exception\EncryptException;
 use ReflectionAttribute;
@@ -43,7 +42,6 @@ class DoctrineEncryptListener implements DoctrineEncryptListenerInterface {
 	private bool $isDisabled;
 
 	public function __construct(
-			private readonly LoggerInterface $logger,
 			private readonly EncryptorInterface $encryptor,
 			array $encryptedAttributes,
 			bool $isDisabled
