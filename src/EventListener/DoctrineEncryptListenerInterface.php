@@ -5,6 +5,7 @@ namespace PSolutions\EncryptBundle\EventListener;
 use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Event\PostLoadEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
+use PSolutions\EncryptBundle\Encryptors\EncryptorInterface;
 
 /**
  * Doctrine event listeners which encrypt/decrypt entities.
