@@ -5,8 +5,6 @@ namespace PSolutions\EncryptBundle\EventListener;
 use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Event\PostLoadEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
-use Psr\Log\LoggerInterface;
-use PSolutions\EncryptBundle\Encryptors\EncryptorInterface;
 
 /**
  * Doctrine event listeners which encrypt/decrypt entities.
@@ -16,7 +14,6 @@ interface DoctrineEncryptListenerInterface {
     public const ENCRYPTED_SUFFIX = '<ENC>';
 
     public function __construct(
-            LoggerInterface $logger,
             EncryptorInterface $encryptor,
             array $encryptedAttributes,
             bool $isDisabled

@@ -1,10 +1,10 @@
 psolutions_encrypt:
     encrypt_key: '%env(PSOLUTIONS_ENCRYPT_KEY)%'
-    # method: 'OpenSSL'           # Algoritmo de cifrado (default: OpenSSL)
-    # listener_class: 'PSolutions\EncryptBundle\EventListener\DoctrineEncryptListener'
-    # encryptor_class: 'PSolutions\EncryptBundle\Encryptors\OpenSslEncryptor'
+    method: 'OpenSSL'           # Algoritmo de cifrado (default: OpenSSL)
+    listener_class: 'PSolutions\EncryptBundle\EventListener\DoctrineEncryptListener'
+    encryptor_class: 'PSolutions\EncryptBundle\Encryptors\OpenSslEncryptor'
     is_disabled: false
     connections:
         - 'default'
-    # annotation_classes:         # Atributos/clases que activan el cifrado
-    #     - 'PSolutions\EncryptBundle\Attributes\Encrypted'
+    annotation_classes:         # Atributos/clases que activan el cifrado
+        - 'PSolutions\EncryptBundle\Attributes\Encrypted'

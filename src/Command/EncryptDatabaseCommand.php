@@ -4,6 +4,7 @@ namespace PSolutions\EncryptBundle\Command;
 
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\Persistence\ManagerRegistry;
+use PSolutions\EncryptBundle\Event\EncryptEvents;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -41,6 +42,20 @@ class EncryptDatabaseCommand extends Command {
         $io = new SymfonyStyle($input, $output);
 
         $direction = $input->getArgument('direction');
+
+        if (!in_array($direction, [
+            EncryptEvents::ENCRYPT,
+            EncryptEvents::DECRYPT
+            ],
+            true
+        )) {
+            $io->error(sprintf(
+                'La dirección puede ser "%s" o "%s"',
+                EncryptEvents::ENCRYPT,
+                EncryptEvents::DECRYPT
+            ));
+            return Command::FAILURE;
+        }
         $managerName = $this->registry->getDefaultManagerName();
 
         $managerNameOption = $input->getOption('manager');
@@ -80,13 +95,15 @@ class EncryptDatabaseCommand extends Command {
         $selectQuery = sprintf('SELECT id, %s FROM %s', $select, $tableName);
 
         // Fetch these encrypted rows
-        $encryptedEntityFields = $this->em->getConnection()->fetchAllAssociative($selectQuery);
+        $encryptedEntityFields = $this->em
+            ->getConnection()
+            ->fetchAllAssociative($selectQuery);
 
         foreach ($encryptedEntityFields as $entity) {
             $decryptedFields = [];
             foreach ($fieldArray as $fieldName => $refProperty) {
 
-                if ('encrypt' === $direction) {
+                if (EncryptEvents::ENCRYPT === $direction) {
                     $newValue = $this->encryptor->encrypt($entity[$fieldName]);
                 } else {
                     $newValue = $this->encryptor->decrypt($entity[$fieldName]);
@@ -95,7 +112,13 @@ class EncryptDatabaseCommand extends Command {
                 $decryptedFields[$fieldName] = $newValue;
             }
 
-            $this->em->getConnection()->update($tableName, $decryptedFields, ['id' => $entity['id']]);
+            $this->em->getConnection()->update(
+                $tableName,
+                $decryptedFields,
+                [
+                    'id' => $entity['id']
+                ]
+            );
         }
     }
 
