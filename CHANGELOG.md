@@ -1,6 +1,6 @@
 # Change Log
 
-## [Unreleased] - Security Enhancement
+## [5.0.0] (2026-05-10) - Security Enhancement
 
 ### 🚨 BREAKING CHANGE: Encryption Algorithm Upgrade (CBC → GCM)
 
