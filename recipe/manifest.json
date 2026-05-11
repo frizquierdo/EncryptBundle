@@ -1,0 +1,15 @@
+{
+    "bundles": {
+        "PSolutions\\EncryptBundle\\PSolutionsEncryptBundle": ["all"]
+    },
+    "env": {
+        "PSOLUTIONS_ENCRYPT_KEY": "change_me!"
+    },
+    "files": [
+        {
+            "file": "config/packages/psolutions_encrypt.yaml",
+            "template": "config/packages/psolutions_encrypt.yaml",
+            "namespace": "encrypt-bundle"
+        }
+    ]
+}

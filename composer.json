@@ -34,5 +34,15 @@
         "psr-4": {
             "PSolutions\\EncryptBundle\\Tests\\": "tests/"
         }
+    },
+    "extra": {
+        "symfony": {
+            "recipes": {
+                "psolutions/encrypt-bundle": {
+                    "url": "https://raw.githubusercontent.com/frizquierdo/EncryptBundle/master/recipe/manifest.json",
+                    "ref": "master"
+                }
+            }
+        }
     }
 }

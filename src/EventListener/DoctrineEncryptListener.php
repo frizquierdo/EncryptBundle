@@ -11,6 +11,8 @@ use Doctrine\ORM\Events;
 use Psr\Log\LoggerInterface;
 use PSolutions\EncryptBundle\Encryptors\EncryptorInterface;
 use PSolutions\EncryptBundle\Exception\EncryptException;
+use ReflectionAttribute;
+use ReflectionClass;
 use ReflectionProperty;
 
 /**
@@ -21,266 +23,277 @@ use ReflectionProperty;
 #[AsDoctrineListener(event: Events::postUpdate)]
 class DoctrineEncryptListener implements DoctrineEncryptListenerInterface {
 
-    /**
-     * Encryptor interface namespace.
-     */
-    public const ENCRYPTOR_INTERFACE_NS = EncryptorInterface::class;
+	/**
+	 * Encryptor interface namespace.
+	 */
+	public const ENCRYPTOR_INTERFACE_NS = EncryptorInterface::class;
 
-    /**
-     * An array of class attribute names that mark properties for encryption.
-     * The default is the bundle's Encrypted attribute.
-     */
-    private array $encryptedAttributes;
+	/**
+	 * An array of class attribute names that mark properties for encryption.
+	 * The default is the bundle's Encrypted attribute.
+	 */
+	private array $encryptedAttributes;
 
-    /**
-     * Caches information on an entity's encrypted fields in an array keyed on
-     * the entity's class name. The value will be a list of Reflected fields
-     * that are encrypted.
-     */
-    protected array $encryptedFieldCache = [];
-    private array $rawValues = [];
-    private bool $isDisabled;
+	/**
+	 * Caches the list of encrypted property names for each entity class.
+	 * Keyed by fully qualified class name, value is array of property name strings.
+	 */
+	protected array $encryptedFieldCache = [];
+	private array $rawValues = [];
+	private bool $isDisabled;
 
-    public function __construct(
-            private readonly LoggerInterface $logger,
-            private readonly EncryptorInterface $encryptor,
-            array $encryptedAttributes,
-            bool $isDisabled
-    ) {
-        $this->encryptedAttributes = $encryptedAttributes;
-        $this->isDisabled = $isDisabled;
-    }
+	public function __construct(
+			private readonly LoggerInterface $logger,
+			private readonly EncryptorInterface $encryptor,
+			array $encryptedAttributes,
+			bool $isDisabled
+	) {
+		$this->encryptedAttributes = $encryptedAttributes;
+		$this->isDisabled = $isDisabled;
+	}
 
-    public function getEncryptor(): EncryptorInterface {
-        return $this->encryptor;
-    }
+	public function getEncryptor(): EncryptorInterface {
+		return $this->encryptor;
+	}
 
-    /**
-     * Set Is Disabled.
-     *
-     * Used to programmatically disable encryption on flush operations.
-     * Decryption still occurs if values have the <ENC> suffix.
-     */
-    public function setIsDisabled(
-        ?bool $isDisabled = true
-    ): DoctrineEncryptListenerInterface {
-        $this->isDisabled = $isDisabled;
+	/**
+	 * Set Is Disabled.
+	 *
+	 * Used to programmatically disable encryption on flush operations.
+	 * Decryption still occurs if values have the <ENC> suffix.
+	 */
+	public function setIsDisabled(
+		?bool $isDisabled = true
+	): DoctrineEncryptListenerInterface {
+		$this->isDisabled = $isDisabled;
 
-        return $this;
-    }
+		return $this;
+	}
 
-    /**
-     * @throws EncryptException
-     */
-    public function onFlush(OnFlushEventArgs $args): void {
-        if ($this->isDisabled) {
-            return;
-        }
+	/**
+	 * @throws EncryptException
+	 */
+	public function onFlush(OnFlushEventArgs $args): void {
+		if ($this->isDisabled) {
+			return;
+		}
 
-        $em = $args->getObjectManager();
-        $unitOfWork = $em->getUnitOfWork();
+		$em = $args->getObjectManager();
+		$unitOfWork = $em->getUnitOfWork();
 
-        foreach ($unitOfWork->getScheduledEntityInsertions() as $entity) {
-            $this->processFields($entity, $em, true, true);
-        }
+		foreach ($unitOfWork->getScheduledEntityInsertions() as $entity) {
+			$this->processFields($entity, $em, true, true);
+		}
 
-        foreach ($unitOfWork->getScheduledEntityUpdates() as $entity) {
-            $this->processFields($entity, $em, true, false);
-        }
-    }
+		foreach ($unitOfWork->getScheduledEntityUpdates() as $entity) {
+			$this->processFields($entity, $em, true, false);
+		}
+	}
 
-    /**
-     * Listen a postLoad lifecycle event. Checking and decrypt entities
-     * which have @Encrypted annotations.
-     *
-     * @throws EncryptException
-     */
-    public function postLoad(PostLoadEventArgs $args): void {
-        $entity = $args->getObject();
-        // Decrypt the entity fields.
-        $this->processFields($entity, $args->getObjectManager(), false, false);
-    }
+	/**
+	 * Listen a postLoad lifecycle event. Checking and decrypt entities
+	 * which have @Encrypted annotations.
+	 *
+	 * @throws EncryptException
+	 */
+	public function postLoad(PostLoadEventArgs $args): void {
+		$entity = $args->getObject();
+		// Decrypt the entity fields.
+		$this->processFields($entity, $args->getObjectManager(), false, false);
+	}
 
-    /**
-     * Decrypt a value.
-     *
-     * If the value is an object, or if it does not contain the suffic <ENC> then return the value iteslf back.
-     * Otherwise, decrypt the value and return.
-     */
-    public function decryptValue(?string $value): ?string {
-        // Else decrypt value and return.
-        return $this->encryptor->decrypt($value);
-    }
+	/**
+	 * Decrypt a value.
+	 *
+	 * If the value is an object, or if it does not contain the suffix <ENC> then return the value itself back.
+	 * Otherwise, decrypt the value and return.
+	 */
+	public function decryptValue(?string $value): ?string {
+		return $this->encryptor->decrypt($value);
+	}
 
-    public function getEncryptionableProperties(array $allProperties): array {
-        $encryptedFields = [];
+	public function getEncryptionableProperties(array $allProperties): array {
+		$encryptedFields = [];
 
-        foreach ($allProperties as $refProperty) {
-            if ($this->isEncryptedProperty($refProperty)) {
-                $encryptedFields[] = $refProperty;
-            }
-        }
+		foreach ($allProperties as $refProperty) {
+			if ($this->isEncryptedProperty($refProperty)) {
+				$encryptedFields[] = $refProperty;
+			}
+		}
 
-        return $encryptedFields;
-    }
+		return $encryptedFields;
+	}
 
-/**
-     * Process (encrypt/decrypt) entities fields.
-     */
-    protected function processFields(
-        object $entity,
-        EntityManagerInterface $em,
-        bool $isEncryptOperation,
-        bool $isInsert
-    ): bool {
-        // Get the encrypted properties in the entity.
-        $properties = $this->getEncryptedFields($entity, $em);
+	/**
+	 * Process (encrypt/decrypt) entities fields.
+	 */
+	protected function processFields(
+		object $entity,
+		EntityManagerInterface $em,
+		bool $isEncryptOperation,
+		bool $isInsert
+	): bool {
+		$properties = $this->getEncryptedFields($entity, $em);
 
-        // If no encrypted properties, return false.
-        if (empty($properties)) {
-            return false;
-        }
+		// If no encrypted properties, return false.
+		if (empty($properties)) {
+			return false;
+		}
 
-        $unitOfWork = $em->getUnitOfWork();
-        $oid = spl_object_id($entity);
-        $className = get_class($entity);
+		$unitOfWork = $em->getUnitOfWork();
+		$oid = spl_object_id($entity);
+		$className = get_class($entity);
+		$reflectionClass = new ReflectionClass($entity);
 
-        foreach ($properties as $key => $propertyAccessor) {
-            // Get the value in the entity.
-            $value = $propertyAccessor->getValue($entity);
+		foreach ($properties as $propName) {
+			$refProperty = $reflectionClass->getProperty($propName);
 
-            // Skip any null values.
-            if (null === $value) {
-                continue;
-            }
+			// Get the value in the entity.
+			// As of PHP 8.1, getValue/setValue ignore visibility, so setAccessible is not needed.
+			$value = $refProperty->getValue($entity);
 
-            if (is_object($value)) {
-                throw new EncryptException(
-                    sprintf('Cannot encrypt an object at %s:%s',
-                        $className,
-                        $key
-                    ),
-                    $value
-                );
-            }
+			// Skip any null values.
+			if (null === $value) {
+				continue;
+			}
 
-            // Encryption is fired by onFlush event, else it is an onLoad event.
-            if ($isEncryptOperation) {
-                $changeSet = $unitOfWork->getEntityChangeSet($entity);
+			if (is_object($value)) {
+				throw new EncryptException(
+					sprintf('Cannot encrypt an object at %s:%s',
+						$className,
+						$propName
+					),
+					$value
+				);
+			}
 
-                // Encrypt value only if change has been detected by Doctrine (comparing unencrypted values, see postLoad flow)
-                if (isset($changeSet[$key])) {
-                    $encryptedValue = $this->encryptor->encrypt($value);
-                    $propertyAccessor->setValue($entity, $encryptedValue);
-                    $unitOfWork->recomputeSingleEntityChangeSet(
-                        $em->getClassMetadata($className),
-                        $entity
-                    );
+			// Encryption is fired by onFlush event, else it is an onLoad event.
+			if ($isEncryptOperation) {
+				$changeSet = $unitOfWork->getEntityChangeSet($entity);
 
-                    if ($isInsert) {
-                        // Restore the decrypted value after the change set update
-                        $propertyAccessor->setValue($entity, $value);
-                    } else {
-                        // Will be restored during postUpdate cycle
-                        $this->rawValues[$oid][$key] = $value;
-                    }
-                }
-            } else {
-                // Decryption is fired by onLoad and postFlush events.
-                $decryptedValue = $this->decryptValue($value);
-                $propertyAccessor->setValue($entity, $decryptedValue);
+				// Encrypt value only if change has been detected by Doctrine (comparing unencrypted values, see postLoad flow)
+				if (isset($changeSet[$propName])) {
+					$encryptedValue = $this->encryptor->encrypt($value);
+					$refProperty->setValue($entity, $encryptedValue);
+					$unitOfWork->recomputeSingleEntityChangeSet(
+						$em->getClassMetadata($className),
+						$entity
+					);
 
-                // Tell Doctrine the original value was the decrypted one.
-                $unitOfWork->setOriginalEntityProperty(
-                    $oid,
-                    $key,
-                    $decryptedValue
-                );
-            }
-        }
+					if ($isInsert) {
+						// Restore the decrypted value after the change set update
+						$refProperty->setValue($entity, $value);
+					} else {
+						// Will be restored during postUpdate cycle
+						$this->rawValues[$oid][$propName] = $value;
+					}
+				}
+			} else {
+				// Decryption is fired by onLoad and postFlush events.
+				$decryptedValue = $this->decryptValue($value);
+				$refProperty->setValue($entity, $decryptedValue);
 
-        return !empty($properties);
-    }
+				// Tell Doctrine the original value was the decrypted one.
+				$unitOfWork->setOriginalEntityProperty(
+					$oid,
+					$propName,
+					$decryptedValue
+				);
+			}
+		}
 
-    public function postUpdate(PostUpdateEventArgs $args): void {
-        $entity = $args->getObject();
-        $em = $args->getObjectManager();
+		return true;
+	}
 
-        $oid = spl_object_id($entity);
-        if (isset($this->rawValues[$oid])) {
-            $className = get_class($entity);
-            $meta = $em->getClassMetadata($className);
-            foreach ($this->rawValues[$oid] as $prop => $rawValue) {
-                $refProperty = $meta->getPropertyAccessor($prop);
-                $refProperty->setValue($entity, $rawValue);
-            }
+	public function postUpdate(PostUpdateEventArgs $args): void {
+		$entity = $args->getObject();
+		$em = $args->getObjectManager();
 
-            unset($this->rawValues[$oid]);
-        }
-    }
+		$oid = spl_object_id($entity);
+		if (isset($this->rawValues[$oid])) {
+			$className = get_class($entity);
+			$meta = $em->getClassMetadata($className);
+			$reflectionClass = $meta->getReflectionClass();
+			foreach ($this->rawValues[$oid] as $prop => $rawValue) {
+				$refProperty = $reflectionClass->getProperty($prop);
+				$refProperty->setValue($entity, $rawValue);
+			}
 
-/**
-      * @return array<string, \Doctrine\ORM\Mapping\PropertyAccessor>
-      */
-    protected function getEncryptedFields(
-        object $entity,
-        EntityManagerInterface $em
-    ): array {
-        $className = get_class($entity);
+			unset($this->rawValues[$oid]);
+		}
+	}
 
-        if (isset($this->encryptedFieldCache[$className])) {
-            return $this->encryptedFieldCache[$className];
-        }
+	/**
+	 * Get the list of encrypted property names for the given entity.
+	 * Uses caching to avoid repeated reflection lookups.
+	 *
+	 * Compatible with both Doctrine 2 and Doctrine 3.
+	 * Does NOT use ClassMetadata::getPropertyAccessors() which only exists in Doctrine 3.
+	 *
+	 * @return array<int, string> List of property names
+	 */
+	protected function getEncryptedFields(
+		object $entity,
+		EntityManagerInterface $em
+	): array {
+		$className = get_class($entity);
 
-        $meta = $em->getClassMetadata($className);
+		if (isset($this->encryptedFieldCache[$className])) {
+			return $this->encryptedFieldCache[$className];
+		}
 
-        $encryptedFields = [];
+		$meta = $em->getClassMetadata($className);
+		$reflectionClass = $meta->getReflectionClass();
+		$encryptedFields = [];
 
-        foreach ($meta->getPropertyAccessors() as $key => $propertyAccessor) {
-            if ($this->isEncryptedField($meta, $key)) {
-                $encryptedFields[$key] = $propertyAccessor;
-            }
-        }
+		// getFieldNames() is available in both Doctrine 2 and 3.
+		// It returns mapped field names (column fields), excluding associations.
+		foreach ($meta->getFieldNames() as $fieldName) {
+			if ($this->isEncryptedField($reflectionClass, $fieldName)) {
+				$encryptedFields[] = $fieldName;
+			}
+		}
 
-        $this->encryptedFieldCache[$className] = $encryptedFields;
+		$this->encryptedFieldCache[$className] = $encryptedFields;
 
-        return $encryptedFields;
-    }
+		return $encryptedFields;
+	}
 
-    /**
-      * Check if a field is encrypted by checking its attributes.
-      */
-    private function isEncryptedField(object $meta, string $fieldName): bool {
-        $reflectionClass = $meta->getReflectionClass();
-        if (!$reflectionClass->hasProperty($fieldName)) {
-            return false;
-        }
+	/**
+	 * Check if a field is encrypted by checking its attributes on the ReflectionClass.
+	 *
+	 * Uses ReflectionClass::getProperty() which is native PHP and available in all
+	 * PHP versions supporting attributes (8.0+). Does not depend on any Doctrine-specific
+	 * method like getPropertyAccessors().
+	 */
+	private function isEncryptedField(ReflectionClass $reflectionClass, string $fieldName): bool {
+		if (!$reflectionClass->hasProperty($fieldName)) {
+			return false;
+		}
 
-        $refProperty = $reflectionClass->getProperty($fieldName);
+		$refProperty = $reflectionClass->getProperty($fieldName);
 
-        if (method_exists($refProperty, 'getAttributes')) {
-            foreach ($refProperty->getAttributes() as $refAttribute) {
-                if (in_array($refAttribute->getName(), $this->encryptedAttributes)) {
-                    return true;
-                }
-            }
-        }
+		foreach ($this->encryptedAttributes as $attributeClass) {
+			if (!empty($refProperty->getAttributes($attributeClass, ReflectionAttribute::IS_INSTANCEOF))) {
+				return true;
+			}
+		}
 
-        return false;
-    }
+		return false;
+	}
 
-    private function isEncryptedProperty(
-            ReflectionProperty $refProperty
-    ): bool {
-        // If PHP8, and has attributes.
-        if (method_exists($refProperty, 'getAttributes')) {
-            foreach ($refProperty->getAttributes() as $refAttribute) {
-                if (in_array($refAttribute->getName(), $this->encryptedAttributes)) {
-                    return true;
-                }
-            }
-        }
+	/**
+	 * Check if a property has an encryption attribute.
+	 */
+	private function isEncryptedProperty(
+		ReflectionProperty $refProperty
+	): bool {
+		foreach ($this->encryptedAttributes as $attributeClass) {
+			if (!empty($refProperty->getAttributes($attributeClass, ReflectionAttribute::IS_INSTANCEOF))) {
+				return true;
+			}
+		}
 
-        return false;
-    }
+		return false;
+	}
 }
