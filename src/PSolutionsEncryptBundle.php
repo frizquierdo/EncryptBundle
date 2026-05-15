@@ -6,7 +6,7 @@ namespace PSolutions\EncryptBundle;
 
 use PSolutions\EncryptBundle\Attributes\Encrypted;
 use PSolutions\EncryptBundle\Encryptors\OpenSslEncryptor;
-use PSolutions\EncryptBundle\Listeners\DoctrineEncryptListener;
+use PSolutions\EncryptBundle\EventListener\DoctrineEncryptListener;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;

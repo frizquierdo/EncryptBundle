@@ -19,7 +19,8 @@
         "symfony/console": "^6.4|^7.0",
         "doctrine/orm": "^2.12|^3.5|^4.0",
         "doctrine/doctrine-bundle": "^2.6",
-        "ext-openssl": "*"
+        "ext-openssl": "*",
+        "twig/twig": "^2.0|^3.0"
     },
     "require-dev": {
         "symfony/phpunit-bridge": "^6.4|^7.0"
