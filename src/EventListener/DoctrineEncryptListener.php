@@ -141,7 +141,8 @@ class DoctrineEncryptListener implements DoctrineEncryptListenerInterface {
 		$unitOfWork = $em->getUnitOfWork();
 		$oid = spl_object_id($entity);
 		$className = get_class($entity);
-		$reflectionClass = new ReflectionClass($entity);
+		$meta = $em->getClassMetadata($className);
+		$reflectionClass = $meta->getReflectionClass();
 
 		foreach ($properties as $propName) {
 			$refProperty = $reflectionClass->getProperty($propName);
