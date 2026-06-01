@@ -3,6 +3,7 @@
 namespace PSolutions\EncryptBundle\EventListener;
 
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
+use Doctrine\Common\Util\ClassUtils;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Event\PostLoadEventArgs;
@@ -140,7 +141,7 @@ class DoctrineEncryptListener implements DoctrineEncryptListenerInterface {
 
 		$unitOfWork = $em->getUnitOfWork();
 		$oid = spl_object_id($entity);
-		$className = get_class($entity);
+		$className = ClassUtils::getClass($entity);
 		$meta = $em->getClassMetadata($className);
 		$reflectionClass = $meta->getReflectionClass();
 
@@ -210,9 +211,10 @@ class DoctrineEncryptListener implements DoctrineEncryptListenerInterface {
 
 		$oid = spl_object_id($entity);
 		if (isset($this->rawValues[$oid])) {
-			$className = get_class($entity);
+			$className = ClassUtils::getClass($entity);
 			$meta = $em->getClassMetadata($className);
 			$reflectionClass = $meta->getReflectionClass();
+
 			foreach ($this->rawValues[$oid] as $prop => $rawValue) {
 				$refProperty = $reflectionClass->getProperty($prop);
 				$refProperty->setValue($entity, $rawValue);
@@ -235,7 +237,7 @@ class DoctrineEncryptListener implements DoctrineEncryptListenerInterface {
 		object $entity,
 		EntityManagerInterface $em
 	): array {
-		$className = get_class($entity);
+		$className = ClassUtils::getClass($entity);
 
 		if (isset($this->encryptedFieldCache[$className])) {
 			return $this->encryptedFieldCache[$className];
