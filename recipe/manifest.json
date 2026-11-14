@@ -2,14 +2,15 @@
     "bundles": {
         "PSolutions\\EncryptBundle\\PSolutionsEncryptBundle": ["all"]
     },
+    "copy-from-recipe": {
+        "config/": "%CONFIG_DIR%/"
+    },
     "env": {
+        "#1": "Generate a key with: bin/console encrypt:genkey",
         "PSOLUTIONS_ENCRYPT_KEY": "change_me!"
     },
-    "files": [
-        {
-            "file": "config/packages/psolutions_encrypt.yaml",
-            "template": "config/packages/psolutions_encrypt.yaml",
-            "namespace": "encrypt-bundle"
-        }
+    "post-install-output": [
+        "  * Set <comment>PSOLUTIONS_ENCRYPT_KEY</> in <comment>.env</> (bin/console encrypt:genkey),",
+        "    or run <comment>bin/console encrypt:install</> to generate it."
     ]
 }

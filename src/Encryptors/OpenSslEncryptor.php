@@ -38,6 +38,10 @@ class OpenSslEncryptor implements EncryptorInterface
      */
     private const IV_LENGTH = 12;
 
+    private const CBC_MIGRATION_HINT = 'If this data appears to be encrypted with the old CBC format (pre-v2.1), ' .
+        'migrate your database first: run "php bin/console encrypt:database decrypt" with the old version, ' .
+        'then upgrade and re-encrypt with "php bin/console encrypt:database encrypt".';
+
     /**
      * Secret key stored in .env and passed via parameters.
      * Must be 256-bit (32 bytes after base64_decode)
@@ -157,16 +161,23 @@ class OpenSslEncryptor implements EncryptorInterface
 
         $key = $this->getValidatedSecretKey();
 
-        // Base64 decode
-        $decoded = base64_decode($data);
+        // Base64 decode (strict: reject characters outside the base64 alphabet instead of silently skipping them)
+        $decoded = base64_decode($data, true);
         if ($decoded === false) {
             throw new EncryptException('Invalid base64 encoded encrypted data');
         }
 
         // Verify minimum length: IV + TAG at minimum
         $minLength = self::IV_LENGTH + self::TAG_LENGTH;
-        if (strlen($decoded) < $minLength) {
-            throw new EncryptException('Encrypted data is too short to contain IV and authentication tag');
+        $decodedLength = strlen($decoded);
+        if ($decodedLength < $minLength) {
+            throw new EncryptException(sprintf(
+                'Encrypted data is too short to contain IV and authentication tag (%d bytes, GCM minimum is %d).%s',
+                $decodedLength,
+                $minLength,
+                // The old CBC format started with a 16-byte IV and had no tag.
+                $decodedLength >= 16 ? ' ' . self::CBC_MIGRATION_HINT : ''
+            ));
         }
 
         // Extract IV, TAG, and ciphertext
@@ -185,32 +196,14 @@ class OpenSslEncryptor implements EncryptorInterface
         );
 
         if ($plaintext === false) {
-            $error = openssl_error_string() ?: 'Unknown OpenSSL error';
+            // The old CBC format was base64(IV[16] . ciphertext[n * 16]). GCM data may have the same length, so
+            // this is only a hint; the message stays generic otherwise to avoid acting as an oracle.
+            $mayBeCbc = $decodedLength >= 32 && 0 === ($decodedLength - 16) % 16;
 
-            // Heuristic detection of old CBC format:
-            // GCM minimum length = IV(12) + TAG(16) = 28 bytes
-            // If decoded data is shorter than 28 bytes, it's definitely not GCM
-            // and likely the old CBC format (which used 16-byte IV, no tag)
-            $decodedLength = strlen($decoded);
-            $gcmMinLength = self::IV_LENGTH + self::TAG_LENGTH;
-
-            if ($decodedLength < $gcmMinLength) {
-                // Data too short to be valid GCM → likely old CBC format
-                $message = sprintf(
-                    'Decryption failed: data appears to be encrypted with the old CBC format (pre-v2.1). ' .
-                    'Length %d bytes is less than GCM minimum of %d bytes. ' .
-                    'Migrate your database first: run "php bin/console encrypt:database decrypt" with the old version, ' .
-                    'then upgrade and re-encrypt with "php bin/console encrypt:database encrypt".',
-                    $decodedLength,
-                    $gcmMinLength
-                );
-                throw new EncryptException($message);
-            }
-
-            // For data of valid GCM length, we keep a generic message to avoid oracle attacks
             throw new EncryptException(
                 'Decryption failed: data may be corrupted, tampered, or the encryption key is incorrect. ' .
-                'If you are upgrading from a previous version, ensure you have migrated existing data first.'
+                'If you are upgrading from a previous version, ensure you have migrated existing data first.' .
+                ($mayBeCbc ? ' ' . self::CBC_MIGRATION_HINT : '')
             );
         }
 
@@ -239,13 +232,14 @@ class OpenSslEncryptor implements EncryptorInterface
             $this->secretKey = $getKeyEvent->getKey();
         }
 
-        // Check that key is set
-        if (empty($this->secretKey)) {
+        // Check that key is set (and is not the recipe placeholder)
+        if (empty($this->secretKey) || 'change_me!' === $this->secretKey) {
             throw new EncryptException(
-                'The bundle psolutions\encrypt-bundle requires an encryption key. ' .
-                'Set PSOLUTIONS_ENCRYPT_KEY in your .env file, or use the ' .
-                'EncryptKeyEvents::LOAD_KEY event to provide a dynamic key. ' .
-                'You can generate a key with: bin/console encrypt:genkey'
+                'The bundle psolutions/encrypt-bundle requires an encryption key' .
+                ('change_me!' === $this->secretKey ? ' (PSOLUTIONS_ENCRYPT_KEY still has the placeholder "change_me!")' : '') . '. ' .
+                'Run "bin/console encrypt:install" to create the configuration and a key, or generate one with ' .
+                '"bin/console encrypt:genkey" and set PSOLUTIONS_ENCRYPT_KEY in your .env file. ' .
+                'A key can also be provided at runtime with the EncryptKeyEvents::LOAD_KEY event.'
             );
         }
 
@@ -257,6 +251,7 @@ class OpenSslEncryptor implements EncryptorInterface
 
         // Verify exact length: 32 bytes = 256 bits
         $keyLength = strlen($key);
+
         if (32 !== $keyLength) {
             throw new EncryptException(
                 sprintf(

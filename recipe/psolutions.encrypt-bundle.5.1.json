@@ -1,0 +1,38 @@
+{
+    "manifests": {
+        "psolutions/encrypt-bundle": {
+            "manifest": {
+                "bundles": {
+                    "PSolutions\\EncryptBundle\\PSolutionsEncryptBundle": [
+                        "all"
+                    ]
+                },
+                "copy-from-recipe": {
+                    "config/": "%CONFIG_DIR%/"
+                },
+                "env": {
+                    "#1": "Generate a key with: bin/console encrypt:genkey",
+                    "PSOLUTIONS_ENCRYPT_KEY": "change_me!"
+                },
+                "post-install-output": [
+                    "  * Set <comment>PSOLUTIONS_ENCRYPT_KEY</> in <comment>.env</> (bin/console encrypt:genkey),",
+                    "    or run <comment>bin/console encrypt:install</> to generate it."
+                ]
+            },
+            "files": {
+                "config/packages/psolutions_encrypt.yaml": {
+                    "contents": [
+                        "psolutions_encrypt:",
+                        "    encrypt_key: '%env(PSOLUTIONS_ENCRYPT_KEY)%'",
+                        "    # Dedicated key for blind indexes (default: derived from encrypt_key).",
+                        "    # Recommended if you plan to rotate encrypt_key. Create it with: bin/console encrypt:install --blind-index-key",
+                        "    # blind_index_key: '%env(PSOLUTIONS_BLIND_INDEX_KEY)%'",
+                        "    is_disabled: false"
+                    ],
+                    "executable": false
+                }
+            },
+            "ref": "d99c8327fc668eac81a73c83dc40ee6d1d9aa5ad"
+        }
+    }
+}

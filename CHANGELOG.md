@@ -1,5 +1,43 @@
 # Change Log
 
+## [5.1.0] (2026-11-14)
+
+Backwards compatible: no change to the encrypted format or the existing API.
+
+### Added
+- **Blind indexes** for searchable encrypted fields: `#[BlindIndex(source: 'email', normalizer: BlindIndex::LOWER_TRIM)]`
+  stores `HMAC-SHA256(normalize(value), key)` next to the encrypted field, usable in `WHERE` and `UNIQUE` indexes.
+  Computed by the Doctrine listener on flush (also when `is_disabled` is true). Query with `BlindIndexer::hash()`.
+  Normalizers: `NONE`, `LOWER_TRIM` or any `BlindIndexNormalizerInterface` service (autoconfigured).
+- `blind_index_key` option. Default: derived from `encrypt_key` with HKDF (never the same key for both).
+- `encrypt:blind-index:rebuild`: recompute indexes of existing rows, in batches, all-or-nothing; lists collisions on
+  unique indexes without writing anything; `--dry-run`, `--entity`, `--connection`.
+- `encrypt:rotate-key`: rotate `encrypt_key` and/or `blind_index_key` in one step, in one transaction per
+  connection, verified before commit (rollback on any error or collision); `--dry-run`, `--write-env`.
+- `encrypt:install`: creates `config/packages/psolutions_encrypt.yaml` and the key(s) in `.env`/`.env.local`.
+  Idempotent; `--force`, `--local`, `--blind-index-key`.
+- `encrypt:genkey --blind-index`; `encrypt:genkey` now warns that a generated key is not applied by itself.
+- `encrypt:database encrypt` rebuilds blind indexes afterwards (`--no-blind-index`); `decrypt --clear-blind-index`.
+- Flex recipe endpoint (`recipe/index.json`) for projects that declare it.
+
+### Changed
+- `encrypt_key` defaults to `%env(default::PSOLUTIONS_ENCRYPT_KEY)%`: the bundle works without a config file.
+  A missing key, or the `change_me!` placeholder, fails on first use with an `EncryptException` pointing to
+  `encrypt:install` / `encrypt:genkey`.
+- Removed `extra.symfony.recipes` from `composer.json` (Flex ignores it in dependencies).
+- `symfony/yaml` is now a declared dependency (the bundle loads `config/services.yaml`).
+
+### Fixed
+- **Inserting an entity with two or more `#[Encrypted]` fields stored all but the last one in plain text.**
+  Re-save affected rows: run `bin/console encrypt:database encrypt` (it only encrypts values that are not
+  encrypted yet).
+- `encryptor_class` was ignored: the configured encryptor is now passed to the factory.
+- `encrypt:database` stopped scanning entities after the first table shared by single table inheritance, and
+  used the deprecated `ClassMetadata::getReflectionProperties()`.
+- `OpenSslEncryptor::decrypt()`: base64 is decoded in strict mode (invalid input now throws
+  "Invalid base64 encoded encrypted data"), and the hint for pre-v2.1 CBC data is reachable again.
+- The test suite runs (`phpunit.xml.dist` with the autoloader).
+
 ## [5.0.0] (2026-05-10) - Security Enhancement
 
 ### 🚨 BREAKING CHANGE: Encryption Algorithm Upgrade (CBC → GCM)

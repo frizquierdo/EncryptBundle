@@ -81,46 +81,56 @@ $ composer require psolutions/encrypt-bundle
 ```
 ## Step 2: Enable the bundle
 
-The receipe will create a package config file under config/packages/psolutions_encrypt.yaml.
-
-If required, enable the bundle by adding it to the list of registered bundles
-in the `config/bundles.php` file of your project:
+Flex registers the bundle automatically. Otherwise add it to `config/bundles.php`:
 
 ```php
-<?php
-
 return [
-    ...
+    // ...
     PSolutions\EncryptBundle\PSolutionsEncryptBundle::class => ['all' => true],
 ];
-
 ```
 
-## Step 2: Configure the bundle
+## Step 3: Configure the bundle
 
-Generate a 256-bit encryption key using the command provided:
+> **Note:** Symfony Flex ignores recipe endpoints declared by a dependency, so `composer require` alone does
+> **not** create the config file. Since v5.1 the bundle works without it: the key defaults to
+> `%env(PSOLUTIONS_ENCRYPT_KEY)%`.
+
+Run the installer once (creates `config/packages/psolutions_encrypt.yaml` and adds a generated key to `.env`;
+it never overwrites unless `--force`; use `--local` to write the key to `.env.local`):
 
 ```
-$ bin/console encrypt:genkey
+$ bin/console encrypt:install
 ```
 
-Copy the key into your .env file:
+Or do it by hand: generate a 256-bit key with `bin/console encrypt:genkey` and add it to `.env`:
+
 ```
-###> encrypt-bundle ###
-PSOLUTIONS_ENCRYPT_KEY= change_me!
-###< encrypt-bundle ###
+###> psolutions/encrypt-bundle ###
+PSOLUTIONS_ENCRYPT_KEY=<generated key>
+###< psolutions/encrypt-bundle ###
 ```
 
-Maker will have created a packages yaml file. The key is resolved in there.
+Optionally, to get the official recipe applied on install, declare the endpoint in **your project's**
+`composer.json`:
+
+```json
+"extra": { "symfony": { "endpoint": [
+    "https://api.github.com/repos/frizquierdo/EncryptBundle/contents/recipe/index.json",
+    "flex://defaults"
+] } }
+```
+
+Full configuration (every option is optional):
 
 ```yaml
 # config/packages/psolutions_encrypt.yaml
 psolutions_encrypt:
-  encrypt_key: '%env(PSOLUTIONS_ENCRYPT_KEY)%'
+  encrypt_key: '%env(PSOLUTIONS_ENCRYPT_KEY)%'  # default (a missing variable fails on first use)
+  blind_index_key: ~  # default: derived from encrypt_key (HKDF); see "Blind indexes"
   is_disabled: false # Turn this to true to disable the encryption.
   connections:   # Optional, define the connection name(s) for the subscriber to listen to.
     - 'default'
-    - 'tenant'
   encryptor_class: App\Encryptors\MyCustomEncryptor # Optional to override the bundle OpenSslEncryptor.
   annotation_classes: # Optional to override the default Attribute object.
     - App\Annotation\MyAttribute
@@ -140,7 +150,7 @@ You can pass the class name of your own encyptor service using the optional encr
 The EncryptKey can be set via a dispatched event listener, which overrides any .env or param.yml defined key.
 Create a listener for the EncryptKeyEvents::LOAD_KEY event and set your encryption key at that point.
 
-## Step 3: Create the entities
+## Step 4: Create the entities
 Add the Encrypted attribute class within the entity.
 
 ```php
@@ -206,7 +216,7 @@ to convert that string.
 You may also need to create a DataTransformer if you are using the parameter in a form
 with the DateType form type.
 
-## Step 4: General Use
+## Step 5: General Use
 
 The bundle comes with an DoctrineEncryptListener. This listener catches the doctrine events
 onLoad, onFlush and postFlush.
@@ -220,7 +230,7 @@ before entry to the database.
 So, in normal CRUD operation you do not need to do anything in the controller for encrypting or decrypting
 the data.
 
-## Step 5: Decrypt in services and controllers
+## Step 6: Decrypt in services and controllers
 
 You can of course inject the EncryptorInterface service any time into classes
 either by using autowiring or defining the injection in your service definitions.
@@ -271,7 +281,7 @@ Or you can dispatch the EncryptEvent.
     }
 ```
 
-## Step 5: Decrypt in templates
+## Step 7: Decrypt in templates
 
 If you query a repository using a select with an array result
 then the doctrine onLoad event subscriber will not decrypt any encrypted
@@ -316,11 +326,77 @@ Encrypted values in the database have the following structure:
 
 All components are necessary; removing or altering any part will cause decryption to fail.
 
+# Blind indexes (searchable encrypted fields)
+
+Encrypted values use a random IV, so they cannot be queried with `WHERE` nor have a `UNIQUE` index. A blind index
+stores, next to the encrypted field, a deterministic, non-reversible `HMAC-SHA256` of the normalized plain value:
+
+```php
+use PSolutions\EncryptBundle\Attributes\BlindIndex;
+use PSolutions\EncryptBundle\Attributes\Encrypted;
+
+#[Encrypted]
+#[ORM\Column(length: 255, nullable: true)]
+private ?string $email = null;
+
+#[BlindIndex(source: 'email', normalizer: BlindIndex::LOWER_TRIM)]
+#[ORM\Column(length: 64, nullable: true, unique: true)]
+private ?string $emailHash = null;
+```
+
+The listener computes it on flush, before encrypting. Query it through the `BlindIndexer` service:
+
+```php
+$user = $repo->findOneBy([
+    'emailHash' => $blindIndexer->hash(User::class, 'emailHash', $email),
+]);
+```
+
+- Exact match only (no `LIKE`, ranges or sorting).
+- An empty source gives a `null` index. The index property must not be `#[Encrypted]`.
+- Normalizers: `BlindIndex::NONE` (default), `BlindIndex::LOWER_TRIM` or your own
+  `BlindIndexNormalizerInterface` service.
+- Trade-off: rows with the same value share the same index, so equality between rows is revealed.
+- Changing `blind_index_key` (or `encrypt_key` when the index key is derived) invalidates every index: rebuild it.
+- Use a dedicated key if you plan to rotate `encrypt_key`, so both keys rotate independently:
+
+```
+$ bin/console encrypt:install --blind-index-key   # adds PSOLUTIONS_BLIND_INDEX_KEY to .env and the yaml option
+$ bin/console encrypt:genkey --blind-index        # or generate one by hand
+```
+
+```yaml
+psolutions_encrypt:
+  blind_index_key: '%env(PSOLUTIONS_BLIND_INDEX_KEY)%'
+```
+
+# Key rotation
+
+Rotate keys with a single command: it never leaves data undecryptable or indexes stale.
+
+```
+$ bin/console encrypt:rotate-key --write-env [--encrypt-key=NEW] [--blind-index-key=NEW] [--dry-run]
+```
+
+- Without values, new keys are generated. With a derived blind index key, rotating `encrypt_key` also rotates it.
+  With a dedicated one, `--blind-index-key` alone only rebuilds indexes and `--encrypt-key` alone only re-encrypts.
+- Per connection, in one transaction: decrypt with the current key, encrypt with the new one, recompute indexes,
+  then verify everything decrypts and no unique index collides. Any failure rolls back, leaving the database untouched.
+- `--write-env` stores the new keys in `.env` (or the given file). Then clear the cache and restart your workers.
+- `--dry-run` runs everything and rolls back, reporting rows, collisions and errors.
+- `--connection` names Doctrine entity managers (default: the `connections` option). The key is shared, so rotate
+  every connection that holds encrypted data in the same run: they are committed together after verification.
+- Not available when the key comes from an `EncryptKeyEvents::LOAD_KEY` listener.
+- Take a database backup first.
+
+`encrypt:genkey` only prints a key; it does not apply it. `encrypt:database encrypt` also rebuilds blind indexes
+(`--no-blind-index` to skip).
+
 # Commands
 
-You have already seen the command to generate a encryption key:
+You have already seen the command to generate a encryption key (`--blind-index` generates a blind index key):
 ```
-$ bin/console encrypt:genkey
+$ bin/console encrypt:genkey [--blind-index]
 ```
 
 You can decrypt/encrypt the entire database using the following
@@ -331,6 +407,17 @@ $ bin/console encrypt:database decrypt connection
 The requried argument should be be decrypt or encrypt.
 
 There is an option to define the database connection if you employ multiple connections in your application.
+
+Create the config file and the key (see Installation):
+```
+$ bin/console encrypt:install [--force] [--local] [--blind-index-key]
+```
+
+Rebuild blind indexes for existing rows or after a key rotation. With `--dry-run` it only reports; without it, it
+refuses to write anything if two rows collide on a unique index and lists them:
+```
+$ bin/console encrypt:blind-index:rebuild [--connection=default] [--entity=FQCN] [--batch-size=200] [--dry-run]
+```
 
 # Migration from Previous Versions
 

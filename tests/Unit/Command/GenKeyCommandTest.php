@@ -1,6 +1,6 @@
 <?php
 
-namespace tests\Unit;
+namespace PSolutions\EncryptBundle\Tests\Unit\Command;
 
 use PHPUnit\Framework\TestCase;
 use PSolutions\EncryptBundle\Command\GenKeyCommand;
@@ -18,7 +18,8 @@ class GenKeyCommandTest extends TestCase
     public function testExecute()
     {
         $application = new Application();
-        $application->add(new GenKeyCommand());
+        $command = new GenKeyCommand();
+        method_exists($application, 'addCommand') ? $application->addCommand($command) : $application->add($command);
 
         $command = $application->find('encrypt:genkey');
 
@@ -33,5 +34,27 @@ class GenKeyCommandTest extends TestCase
 
         // Assert that the command output contains text that like: Key is: FdY6sodQZ0GJBACsDlNda/9YEycltVmtob3CIhYe5Kw=
         $this->assertMatchesRegularExpression('/Key\sis:\s(\S{43}\=)/i', $commandTester->getDisplay());
+    }
+
+    public function testBlindIndexKey(): void
+    {
+        $tester = new CommandTester(new GenKeyCommand(true));
+        $tester->execute(['--blind-index' => true]);
+
+        $this->assertSame(Command::SUCCESS, $tester->getStatusCode());
+        $this->assertMatchesRegularExpression('/Key\sis:\s(\S{43}=)/', $tester->getDisplay());
+        preg_match('/Key\sis:\s(\S{43}=)/', $tester->getDisplay(), $m);
+        $this->assertSame(32, strlen(base64_decode($m[1], true)));
+        $this->assertStringContainsString('encrypt:rotate-key', $tester->getDisplay());
+        $this->assertStringContainsString('Blind Index', $tester->getDisplay());
+    }
+
+    public function testWarnsThatDerivedIndexKeyFollowsEncryptKey(): void
+    {
+        $tester = new CommandTester(new GenKeyCommand(true));
+        $tester->execute([]);
+
+        $this->assertStringContainsString('encrypt:rotate-key', $tester->getDisplay());
+        $this->assertStringContainsString('derived from encrypt_key', $tester->getDisplay());
     }
 }

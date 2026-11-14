@@ -1,6 +1,6 @@
 <?php
 
-namespace PSolutions\EncryptBundle\tests\Unit\Encryptors;
+namespace PSolutions\EncryptBundle\Tests\Unit\Encryptors;
 
 use PSolutions\EncryptBundle\Encryptors\OpenSslEncryptor;
 use PSolutions\EncryptBundle\Exception\EncryptException;
@@ -117,7 +117,7 @@ class OpenSslEncryptorTest extends \PHPUnit\Framework\TestCase
         $encryptor->setSecretKey(self::TEST_KEY);
 
         // Valid base64 but too short to contain IV + TAG (minimum 28 bytes decoded)
-        $short = base64_encode('x<ENC>'); // 2 chars decoded
+        $short = base64_encode('x') . '<ENC>'; // 1 byte decoded
 
         $this->expectException(EncryptException::class);
         $this->expectExceptionMessage('Encrypted data is too short');

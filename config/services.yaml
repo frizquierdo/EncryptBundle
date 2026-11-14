@@ -16,6 +16,7 @@ services:
         arguments:
             $encryptedAttributes: '%psolutions_encrypt.encrypted_attributes%'
             $isDisabled: '%psolutions_encrypt.is_disabled%'
+            # $blindIndexer is autowired (optional 4th argument, so custom listener classes keep working)
         tags:
             - { name: doctrine.event_listener, event: 'onFlush', connection: default }
             - { name: doctrine.event_listener, event: 'postLoad', connection: default }
@@ -38,6 +39,7 @@ services:
         factory: ['@PSolutions\EncryptBundle\Encryptors\EncryptorFactory','createService']
         arguments:
             $encryptKey: '%psolutions_encrypt.encrypt_key%'
+            $encryptorClass: '%psolutions_encrypt.encryptor_class%'
 
     # Encrypt Twig extension that defins the decrypt filter.
     PSolutions\EncryptBundle\Twig\EncryptExtension:
@@ -47,10 +49,51 @@ services:
     PSolutions\EncryptBundle\Command\EncryptDatabaseCommand:
         arguments:
             $encryptedAttributes: '%psolutions_encrypt.encrypted_attributes%'
+            $rewriter: '@PSolutions\EncryptBundle\Maintenance\DatabaseRewriter'
         tags:
             -  { name: console.command }
 
     ## CLI command to generate a 256 bit encryption key
     PSolutions\EncryptBundle\Command\GenKeyCommand:
+        arguments:
+            $derivedBlindIndexKey: '%psolutions_encrypt.blind_index_key_derived%'
+        tags:
+            -  { name: console.command }
+
+    ## Blind indexes: HMAC of the normalized plain value, for equality queries and unique indexes
+    PSolutions\EncryptBundle\BlindIndex\BlindIndexer:
+        arguments:
+            $registry: '@doctrine'
+            $dispatcher: '@event_dispatcher'
+            $encryptKey: '%psolutions_encrypt.encrypt_key%'
+            $blindIndexKey: '%psolutions_encrypt.blind_index_key%'
+            $encryptedAttributes: '%psolutions_encrypt.encrypted_attributes%'
+            $normalizers: !tagged_locator { tag: 'psolutions_encrypt.blind_index_normalizer' }
+
+    PSolutions\EncryptBundle\BlindIndex\LowerTrimNormalizer: ~
+
+    PSolutions\EncryptBundle\Maintenance\DatabaseRewriter: ~
+
+    PSolutions\EncryptBundle\Command\BlindIndexRebuildCommand:
+        arguments:
+            $registry: '@doctrine'
+            $connections: '%psolutions_encrypt.connections%'
+        tags:
+            -  { name: console.command }
+
+    PSolutions\EncryptBundle\Command\RotateKeyCommand:
+        arguments:
+            $registry: '@doctrine'
+            $dispatcher: '@event_dispatcher'
+            $connections: '%psolutions_encrypt.connections%'
+            $encryptorClass: '%psolutions_encrypt.encryptor_class%'
+            $projectDir: '%kernel.project_dir%'
+            $environment: '%kernel.environment%'
+        tags:
+            -  { name: console.command }
+
+    PSolutions\EncryptBundle\Command\InstallCommand:
+        arguments:
+            $projectDir: '%kernel.project_dir%'
         tags:
             -  { name: console.command }

@@ -1,19 +1,21 @@
 {
-    "name" : "psolutions/encrypt-bundle",
-    "type" : "symfony-bundle",
-    "description" : "Bundle provides a service for encrypting values via attribute.",
+    "name": "psolutions/encrypt-bundle",
+    "type": "symfony-bundle",
+    "description": "Bundle provides a service for encrypting values via attribute.",
     "homepage": "https://github.com/frizquierdo/EncryptBundle",
-    "authors" : [{
-        "name" : "Francisco Izquierdo",
-        "email" : "frizquierdo87@gmail.com"
-    }],
-    "keywords" : [
+    "authors": [
+        {
+            "name": "Francisco Izquierdo",
+            "email": "frizquierdo87@gmail.com"
+        }
+    ],
+    "keywords": [
         "encrypt bundle"
     ],
-    "license" : [
+    "license": [
         "MIT"
     ],
-    "require" : {
+    "require": {
         "php": ">=8.2",
         "symfony/framework-bundle": "^6.4|^7.0|^8.0",
         "symfony/console": "^6.4|^7.0|^8.0",
@@ -21,7 +23,8 @@
         "doctrine/common": "^2.11|^3.0|^4.0",
         "doctrine/doctrine-bundle": "^2.6",
         "ext-openssl": "*",
-        "twig/twig": "^2.0|^3.0"
+        "twig/twig": "^2.0|^3.0",
+        "symfony/yaml": "^6.4|^7.0|^8.0"
     },
     "require-dev": {
         "symfony/phpunit-bridge": "^6.4|^7.0"
@@ -34,16 +37,6 @@
     "autoload-dev": {
         "psr-4": {
             "PSolutions\\EncryptBundle\\Tests\\": "tests/"
-        }
-    },
-    "extra": {
-        "symfony": {
-            "recipes": {
-                "psolutions/encrypt-bundle": {
-                    "url": "https://raw.githubusercontent.com/frizquierdo/EncryptBundle/master/recipe/manifest.json",
-                    "ref": "master"
-                }
-            }
         }
     }
 }

@@ -18,6 +18,7 @@ interface DoctrineEncryptListenerInterface {
             EncryptorInterface $encryptor,
             array $encryptedAttributes,
             bool $isDisabled
+            // Implementations may accept an optional 4th argument: ?BlindIndexer $blindIndexer = null
     );
 
     /**

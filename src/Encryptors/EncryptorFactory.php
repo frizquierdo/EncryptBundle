@@ -18,11 +18,12 @@ class EncryptorFactory
     /**
      * Create service will return the desired encryption service.
      *
-     * @param string      $encryptKey     256-bit encryption key
+     * @param string|null $encryptKey     256-bit encryption key (base64). Validated on first use, so a missing
+     *                                    key fails with an explicit EncryptException instead of at boot.
      * @param string|null $encryptorClass the desired encryptor, defaults to OpenSSL, but can be overridden by passing a classname
      */
     public function createService(
-        string $encryptKey,
+        ?string $encryptKey,
         ?string $encryptorClass = self::SUPPORTED_EXTENSION_OPENSSL
     ): EncryptorInterface {
         if (!class_exists($encryptorClass)) {
@@ -41,7 +42,7 @@ class EncryptorFactory
         }
 
         $encryptor = new $encryptorClass($this->dispatcher);
-        $encryptor->setSecretKey($encryptKey);
+        $encryptor->setSecretKey((string) $encryptKey);
 
         return $encryptor;
     }

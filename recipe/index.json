@@ -1,0 +1,14 @@
+{
+    "recipes": {
+        "psolutions/encrypt-bundle": [
+            "5.1"
+        ]
+    },
+    "branch": "master",
+    "is_contrib": true,
+    "_links": {
+        "repository": "github.com/frizquierdo/EncryptBundle",
+        "origin_template": "{package}:{version}@github.com/frizquierdo/EncryptBundle:master",
+        "recipe_template": "https://api.github.com/repos/frizquierdo/EncryptBundle/contents/recipe/{package_dotted}.{version}.json"
+    }
+}

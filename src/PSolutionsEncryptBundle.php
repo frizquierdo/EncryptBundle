@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PSolutions\EncryptBundle;
 
 use PSolutions\EncryptBundle\Attributes\Encrypted;
+use PSolutions\EncryptBundle\BlindIndex\BlindIndexNormalizerInterface;
 use PSolutions\EncryptBundle\Encryptors\OpenSslEncryptor;
 use PSolutions\EncryptBundle\EventListener\DoctrineEncryptListener;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
@@ -23,7 +24,13 @@ class PSolutionsEncryptBundle extends AbstractBundle {
     public function configure(DefinitionConfigurator $definition): void {
         $definition->rootNode()
                 ->children()
-                ->scalarNode('encrypt_key')->end()
+                // default:: resolves a missing variable to null, so the bundle boots without it and fails with an
+                // explicit EncryptException on first use (see OpenSslEncryptor::getValidatedSecretKey()).
+                ->scalarNode('encrypt_key')->defaultValue('%env(default::PSOLUTIONS_ENCRYPT_KEY)%')->end()
+                ->scalarNode('blind_index_key')
+                    ->info('Dedicated base64 256-bit key for blind indexes. Default (null): derived from encrypt_key with HKDF.')
+                    ->defaultNull()
+                ->end()
                 ->scalarNode('method')->defaultValue('OpenSSL')->end()
                 ->scalarNode('listener_class')->defaultValue(DoctrineEncryptListener::class)->end()
                 ->scalarNode('encryptor_class')->defaultValue(OpenSslEncryptor::class)->end()
@@ -56,10 +63,19 @@ class PSolutionsEncryptBundle extends AbstractBundle {
         $encryptKey = $config['encrypt_key'];
 
         $container->parameters()->set($this->extensionAlias . '.encrypt_key', $encryptKey);
+        $container->parameters()->set($this->extensionAlias . '.blind_index_key', $config['blind_index_key']);
+        $container->parameters()->set(
+            $this->extensionAlias . '.blind_index_key_derived',
+            null === $config['blind_index_key'] || '' === $config['blind_index_key']
+        );
+        $container->parameters()->set($this->extensionAlias . '.connections', $config['connections']);
         $container->parameters()->set($this->extensionAlias . '.method', $config['method']);
         $container->parameters()->set($this->extensionAlias . '.encryptor_class', $config['encryptor_class']);
         $container->parameters()->set($this->extensionAlias . '.listener_class', $config['listener_class']);
         $container->parameters()->set($this->extensionAlias . '.encrypted_attributes', $config['annotation_classes']);
         $container->parameters()->set($this->extensionAlias . '.is_disabled', $config['is_disabled']);
+
+        $builder->registerForAutoconfiguration(BlindIndexNormalizerInterface::class)
+            ->addTag('psolutions_encrypt.blind_index_normalizer');
     }
 }

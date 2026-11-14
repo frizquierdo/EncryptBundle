@@ -4,6 +4,7 @@ namespace PSolutions\EncryptBundle\Command;
 
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\Persistence\ManagerRegistry;
+use PSolutions\EncryptBundle\Maintenance\DatabaseRewriter;
 use PSolutions\EncryptBundle\Event\EncryptEvents;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Input\InputArgument;
@@ -27,7 +28,8 @@ class EncryptDatabaseCommand extends Command {
     public function __construct(
             private readonly EncryptorInterface $encryptor,
             private readonly ManagerRegistry $registry,
-            private readonly array $encryptedAttributes
+            private readonly array $encryptedAttributes,
+            private readonly ?DatabaseRewriter $rewriter = null
     ) {
         parent::__construct();
     }
@@ -35,6 +37,8 @@ class EncryptDatabaseCommand extends Command {
     protected function configure(): void {
         $this->addArgument('direction', InputArgument::REQUIRED, 'Encrypt or Decrypt db.');
         $this->addOption('manager', null, InputOption::VALUE_OPTIONAL, 'Nominate the database connection manager name.');
+        $this->addOption('no-blind-index', null, InputOption::VALUE_NONE, 'encrypt: do not rebuild the blind indexes afterwards.');
+        $this->addOption('clear-blind-index', null, InputOption::VALUE_NONE, 'decrypt: also set the blind indexes to null (they stay valid otherwise).');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int {
@@ -68,11 +72,11 @@ class EncryptDatabaseCommand extends Command {
 
         $this->getEncryptedFields();
 
-        $io->title('Decrypting the database');
+        $io->title(EncryptEvents::ENCRYPT === $direction ? 'Encrypting the database' : 'Decrypting the database');
 
         $tables = count($this->encryptedFields);
 
-        $io->writeln($tables . ' tables to decrypt');
+        $io->writeln($tables . ' tables to process');
 
         $io->progressStart($tables);
 
@@ -83,7 +87,34 @@ class EncryptDatabaseCommand extends Command {
 
         $io->progressFinish();
 
-        return Command::SUCCESS;
+        if (null === $this->rewriter) {
+            return Command::SUCCESS;
+        }
+
+        $indexMode = null;
+        if (EncryptEvents::ENCRYPT === $direction && !$input->getOption('no-blind-index')) {
+            $indexMode = DatabaseRewriter::INDEX_REBUILD;
+        } elseif (EncryptEvents::DECRYPT === $direction && $input->getOption('clear-blind-index')) {
+            $indexMode = DatabaseRewriter::INDEX_CLEAR;
+        }
+
+        if (null === $indexMode) {
+            return Command::SUCCESS;
+        }
+
+        $io->section(DatabaseRewriter::INDEX_CLEAR === $indexMode ? 'Clearing blind indexes' : 'Rebuilding blind indexes');
+        $report = $this->rewriter->rewrite(
+            managers: [$managerName => $this->em],
+            sourceEncryptor: $this->encryptor,
+            indexMode: $indexMode,
+        );
+
+        $status = BlindIndexRebuildCommand::renderReport($io, $report, 'Blind indexes updated');
+        if (Command::SUCCESS !== $status) {
+            $io->warning('The data was processed but the blind indexes were not. Fix the problems above and run bin/console encrypt:blind-index:rebuild.');
+        }
+
+        return $status;
     }
 
     private function decryptTable(string $tableName, array $fieldArray, string $direction): void {
@@ -136,15 +167,21 @@ class EncryptDatabaseCommand extends Command {
 
             $tableName = $entityMeta->getTableName();
 
+            // Single table inheritance: the table was already collected from another class of the hierarchy.
             if (isset($this->encryptedFields[$tableName])) {
-                return $this->encryptedFields[$tableName];
+                continue;
             }
 
             $meta = $this->em->getClassMetadata($entityMeta->getName());
+            $reflectionClass = $meta->getReflectionClass();
 
-            foreach ($meta->getReflectionProperties() as $key => $refProperty) {
+            foreach ($meta->getFieldNames() as $fieldName) {
+                if (!$reflectionClass->hasProperty($fieldName)) {
+                    continue;
+                }
+                $refProperty = $reflectionClass->getProperty($fieldName);
                 if ($this->isEncryptedProperty($refProperty)) {
-                    $columnName = $meta->getColumnName($key);
+                    $columnName = $meta->getColumnName($fieldName);
                     $this->encryptedFields[$tableName][$columnName] = $refProperty;
                 }
             }

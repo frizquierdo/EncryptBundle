@@ -9,6 +9,7 @@ use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Event\PostLoadEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
 use Doctrine\ORM\Events;
+use PSolutions\EncryptBundle\BlindIndex\BlindIndexer;
 use PSolutions\EncryptBundle\Encryptors\EncryptorInterface;
 use PSolutions\EncryptBundle\Exception\EncryptException;
 use ReflectionAttribute;
@@ -45,7 +46,8 @@ class DoctrineEncryptListener implements DoctrineEncryptListenerInterface {
 	public function __construct(
 			private readonly EncryptorInterface $encryptor,
 			array $encryptedAttributes,
-			bool $isDisabled
+			bool $isDisabled,
+			private readonly ?BlindIndexer $blindIndexer = null
 	) {
 		$this->encryptedAttributes = $encryptedAttributes;
 		$this->isDisabled = $isDisabled;
@@ -73,12 +75,22 @@ class DoctrineEncryptListener implements DoctrineEncryptListenerInterface {
 	 * @throws EncryptException
 	 */
 	public function onFlush(OnFlushEventArgs $args): void {
+		$em = $args->getObjectManager();
+		$unitOfWork = $em->getUnitOfWork();
+
+		// Blind indexes are computed from the plain values, before encrypting, and even when encryption is
+		// disabled: they do not depend on it.
+		foreach ($unitOfWork->getScheduledEntityInsertions() as $entity) {
+			$this->computeBlindIndexes($entity, $em);
+		}
+
+		foreach ($unitOfWork->getScheduledEntityUpdates() as $entity) {
+			$this->computeBlindIndexes($entity, $em);
+		}
+
 		if ($this->isDisabled) {
 			return;
 		}
-
-		$em = $args->getObjectManager();
-		$unitOfWork = $em->getUnitOfWork();
 
 		foreach ($unitOfWork->getScheduledEntityInsertions() as $entity) {
 			$this->processFields($entity, $em, true, true);
@@ -181,8 +193,11 @@ class DoctrineEncryptListener implements DoctrineEncryptListenerInterface {
 					);
 
 					if ($isInsert) {
-						// Restore the decrypted value after the change set update
+						// Restore the decrypted value after the change set update, and make it the original
+						// value too: otherwise the recompute for the next encrypted field (or the next flush)
+						// would see plain != encrypted original and put the plain value back in the change set.
 						$refProperty->setValue($entity, $value);
+						$unitOfWork->setOriginalEntityProperty($oid, $propName, $value);
 					} else {
 						// Will be restored during postUpdate cycle
 						$this->rawValues[$oid][$propName] = $value;
@@ -203,6 +218,51 @@ class DoctrineEncryptListener implements DoctrineEncryptListenerInterface {
 		}
 
 		return true;
+	}
+
+	/**
+	 * Recompute the blind indexes of an entity from the plain source values and update its change set.
+	 *
+	 * @throws EncryptException
+	 */
+	protected function computeBlindIndexes(object $entity, EntityManagerInterface $em): void {
+		if (null === $this->blindIndexer) {
+			return;
+		}
+
+		$meta = $em->getClassMetadata(ClassUtils::getClass($entity));
+		$indexes = $this->blindIndexer->getBlindIndexes($meta);
+
+		if (empty($indexes)) {
+			return;
+		}
+
+		$changed = false;
+
+		foreach ($indexes as $propName => $blindIndex) {
+			$source = $meta->getFieldValue($entity, $blindIndex->source);
+
+			if (null !== $source && !is_scalar($source)) {
+				throw new EncryptException(sprintf(
+					'Cannot compute a blind index from a non-scalar value at %s:%s',
+					$meta->getName(),
+					$blindIndex->source
+				));
+			}
+
+			// The entity normally holds the plain value; decrypt() is a no-op unless it is still encrypted.
+			$plain = null === $source ? null : $this->encryptor->decrypt((string) $source);
+			$hash = $this->blindIndexer->compute($plain, $blindIndex->normalizer);
+
+			if ($hash !== $meta->getFieldValue($entity, $propName)) {
+				$meta->setFieldValue($entity, $propName, $hash);
+				$changed = true;
+			}
+		}
+
+		if ($changed) {
+			$em->getUnitOfWork()->recomputeSingleEntityChangeSet($meta, $entity);
+		}
 	}
 
 	public function postUpdate(PostUpdateEventArgs $args): void {
